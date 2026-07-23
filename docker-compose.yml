@@ -1,0 +1,53 @@
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - omeka_db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  omeka:
+    build:
+      context: .
+      dockerfile: docker/omeka-s/Dockerfile
+      args:
+        OMEKA_S_VERSION: ${OMEKA_S_VERSION}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: db
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      # Lus par le module AiLibrarian (voir modules/AiLibrarian).
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY}
+    ports:
+      - "${OMEKA_HTTP_PORT}:80"
+    volumes:
+      - omeka_files:/var/www/html/files
+      - omeka_config:/var/www/html/config
+      - omeka_logs:/var/www/html/logs
+      # Module personnalisé monté en direct depuis le dépôt : toute
+      # modification du code du module est visible immédiatement, sans
+      # reconstruire l'image.
+      - ./modules/AiLibrarian:/var/www/html/modules/AiLibrarian
+
+volumes:
+  omeka_db:
+  omeka_files:
+  omeka_config:
+  omeka_logs:

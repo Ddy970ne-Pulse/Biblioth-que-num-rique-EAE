@@ -1,0 +1,38 @@
+<?php
+/**
+ * @var \Laminas\View\Renderer\PhpRenderer $this
+ * @var string $query
+ * @var array|null $answer
+ */
+$this->headTitle('Assistant de recherche — Bibliothèque numérique');
+?>
+<div class="ai-librarian-ask">
+    <h1>Assistant de recherche</h1>
+    <p class="ai-librarian-disclaimer">
+        Cet assistant répond <strong>exclusivement</strong> à partir des études indexées dans cette
+        bibliothèque. Il ne complète jamais ses réponses avec des connaissances extérieures au corpus.
+        Chaque réponse est accompagnée des études sur lesquelles elle s'appuie.
+    </p>
+
+    <form method="get" action="<?= $this->escapeHtmlAttr($this->url('ai-librarian/ask')) ?>" class="ai-librarian-ask-form">
+        <label for="ai-librarian-ask-q">Votre question</label>
+        <textarea id="ai-librarian-ask-q" name="q" rows="3" placeholder="Ex. : comment le message sur tel thème a-t-il évolué ?"><?= $this->escapeHtml($query) ?></textarea>
+        <button type="submit">Poser la question</button>
+    </form>
+
+    <?php if ($answer !== null): ?>
+        <div class="ai-librarian-answer">
+            <h2>Réponse</h2>
+            <p><?= nl2br($this->escapeHtml($answer['answer'])) ?></p>
+
+            <?php if (!empty($answer['sources'])): ?>
+                <h3>Études citées</h3>
+                <ul>
+                    <?php foreach ($answer['sources'] as $source): ?>
+                        <li><?= $this->escapeHtml($source['title']) ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+</div>

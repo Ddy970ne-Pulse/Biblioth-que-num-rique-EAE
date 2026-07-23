@@ -1,0 +1,43 @@
+<?php
+/**
+ * @var \Laminas\View\Renderer\PhpRenderer $this
+ * @var string $query
+ * @var array $results
+ */
+$this->headTitle('Recherche — Bibliothèque numérique');
+?>
+<div class="ai-librarian-search">
+    <h1>Recherche dans la bibliothèque</h1>
+
+    <form method="get" action="<?= $this->escapeHtmlAttr($this->url('ai-librarian')) ?>" class="ai-librarian-search-form">
+        <label for="ai-librarian-q">Rechercher par mot-clé ou thème</label>
+        <input type="text" id="ai-librarian-q" name="q" value="<?= $this->escapeHtmlAttr($query) ?>" placeholder="Ex. : un thème, une notion, un mot du corpus">
+        <button type="submit">Rechercher</button>
+    </form>
+
+    <p class="ai-librarian-ask-link">
+        Vous préférez poser une question en langage naturel ?
+        <a href="<?= $this->escapeHtmlAttr($this->url('ai-librarian/ask')) ?><?= $query ? '?q=' . urlencode($query) : '' ?>">
+            Interroger l'assistant de recherche
+        </a>
+        — les réponses sont toujours limitées et sourcées aux études de ce corpus.
+    </p>
+
+    <?php if ($query !== ''): ?>
+        <h2><?= count($results) ?> résultat(s) pour « <?= $this->escapeHtml($query) ?> »</h2>
+
+        <?php if (empty($results)): ?>
+            <p>Aucune étude indexée ne correspond à cette recherche.</p>
+        <?php else: ?>
+            <ul class="ai-librarian-results">
+                <?php foreach ($results as $result): ?>
+                    <li>
+                        <strong><?= $this->escapeHtml($result['title']) ?></strong>
+                        <span class="score">(pertinence : <?= round($result['score'] * 100) ?>%)</span>
+                        <p class="excerpt"><?= $this->escapeHtml(mb_substr($result['content'], 0, 300)) ?>…</p>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
+    <?php endif; ?>
+</div>

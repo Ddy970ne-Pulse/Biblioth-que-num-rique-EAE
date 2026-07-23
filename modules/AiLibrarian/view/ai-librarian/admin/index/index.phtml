@@ -1,0 +1,31 @@
+<?php
+/**
+ * @var \Laminas\View\Renderer\PhpRenderer $this
+ */
+$this->htmlElement('body')->appendAttribute('class', 'ai-librarian');
+$this->headTitle('AI Librarian');
+?>
+<?= $this->pageTitle('AI Librarian') ?>
+
+<div class="ai-librarian-admin">
+    <p>
+        Ce module indexe le corpus (études) pour la recherche sémantique et l'assistant de
+        questions/réponses. Voir <code>docs/architecture-ia.md</code> pour le détail du fonctionnement
+        et du cloisonnement au corpus.
+    </p>
+
+    <p>
+        La réindexation recalcule les extraits et vecteurs sémantiques de tous les items.
+        À relancer après un import ou une modification importante du corpus.
+    </p>
+
+    <a href="<?= $this->escapeHtmlAttr($this->url('admin/ai-librarian/reindex')) ?>" class="button">
+        Réindexer le corpus
+    </a>
+
+    <p class="notes">
+        Pour un corpus volumineux, cette opération peut être longue : envisager de la déplacer vers
+        une tâche en arrière-plan (<code>Omeka\Job</code>) plutôt qu'un traitement synchrone si elle
+        dépasse le délai d'exécution PHP configuré.
+    </p>
+</div>

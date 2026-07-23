@@ -1,0 +1,14 @@
+{
+    "name": "bibliotheque-mouvement/ai-librarian",
+    "description": "Module Omeka S : recherche sémantique et assistant IA strictement sourcé sur le corpus indexé.",
+    "type": "omeka-s-module",
+    "require": {
+        "php": ">=8.1",
+        "anthropic-ai/sdk": "^0.7"
+    },
+    "autoload": {
+        "psr-4": {
+            "AiLibrarian\\": "src/"
+        }
+    }
+}

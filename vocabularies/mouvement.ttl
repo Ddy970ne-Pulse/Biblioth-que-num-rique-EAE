@@ -1,0 +1,98 @@
+@prefix mvt: <http://example.org/vocab/mouvement#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+
+# Vocabulaire personnalisé pour la bibliothèque numérique du mouvement.
+#
+# Avant import : remplacer l'URI de base "http://example.org/vocab/mouvement#"
+# par un URI stable et réellement résolvable sous votre nom de domaine
+# (ex. https://bibliotheque.votre-domaine.org/vocab/mouvement#), et mettre à
+# jour ce fichier avant l'import dans Omeka S — l'URI du vocabulaire doit
+# rester stable une fois des données créées avec, car les propriétés sont
+# référencées par URI dans les items.
+#
+# Import : Admin Omeka S -> Contenu -> Vocabulaires -> Ajouter un vocabulaire
+# -> Importer depuis un fichier (choisir ce fichier, format Turtle).
+
+<http://example.org/vocab/mouvement#> a owl:Ontology ;
+    rdfs:label "Vocabulaire du mouvement"@fr ;
+    rdfs:comment "Vocabulaire personnalisé pour tracer l'histoire et l'évolution du message enseigné par le mouvement à travers ses études."@fr .
+
+# ---------------------------------------------------------------------------
+# Classes
+# ---------------------------------------------------------------------------
+
+mvt:Etude a owl:Class ;
+    rdfs:label "Étude"@fr ;
+    rdfs:comment "Une étude individuelle produite au sein du mouvement."@fr .
+
+mvt:Auteur a owl:Class ;
+    rdfs:label "Auteur"@fr ;
+    rdfs:comment "Personne ayant produit ou enseigné une étude."@fr .
+
+mvt:Theme a owl:Class ;
+    rdfs:label "Thème"@fr ;
+    rdfs:comment "Thème abordé par une ou plusieurs études, organisable en arborescence."@fr .
+
+mvt:Periode a owl:Class ;
+    rdfs:label "Période"@fr ;
+    rdfs:comment "Période ou phase d'enseignement identifiable dans l'histoire du mouvement."@fr .
+
+# ---------------------------------------------------------------------------
+# Propriétés — Étude
+# ---------------------------------------------------------------------------
+
+mvt:theme a rdf:Property ;
+    rdfs:label "Thème"@fr ;
+    rdfs:comment "Thème(s) abordé(s) par cette étude."@fr ;
+    rdfs:domain mvt:Etude ;
+    rdfs:range mvt:Theme .
+
+mvt:periode a rdf:Property ;
+    rdfs:label "Période"@fr ;
+    rdfs:comment "Période d'enseignement à laquelle rattacher cette étude."@fr ;
+    rdfs:domain mvt:Etude ;
+    rdfs:range mvt:Periode .
+
+mvt:messageCle a rdf:Property ;
+    rdfs:label "Message clé"@fr ;
+    rdfs:comment "Formulation courte du message enseigné dans cette étude sur le thème traité. Sert d'ancrage pour la recherche sémantique et le suivi d'évolution du message."@fr ;
+    rdfs:domain mvt:Etude .
+
+mvt:precede a rdf:Property ;
+    rdfs:label "Prolonge l'étude"@fr ;
+    rdfs:comment "Lien vers une étude antérieure que celle-ci prolonge, précise ou complète."@fr ;
+    rdfs:domain mvt:Etude ;
+    rdfs:range mvt:Etude .
+
+mvt:corrige a rdf:Property ;
+    rdfs:label "Corrige l'étude"@fr ;
+    rdfs:comment "Lien vers une étude antérieure dont cette étude corrige ou nuance le contenu. Champ clé pour tracer l'évolution du message dans le temps."@fr ;
+    rdfs:domain mvt:Etude ;
+    rdfs:range mvt:Etude .
+
+mvt:citationExterne a rdf:Property ;
+    rdfs:label "Citation externe"@fr ;
+    rdfs:comment "Référence à une source extérieure au mouvement, explicitement citée dans cette étude. Seule catégorie de source externe que l'assistant IA de la bibliothèque est autorisé à restituer, et toujours en la signalant comme telle."@fr ;
+    rdfs:domain mvt:Etude .
+
+# ---------------------------------------------------------------------------
+# Propriétés — Auteur
+# ---------------------------------------------------------------------------
+
+mvt:role a rdf:Property ;
+    rdfs:label "Rôle"@fr ;
+    rdfs:comment "Rôle de la personne au sein du mouvement (ex. fondateur, enseignant, intervenant)."@fr ;
+    rdfs:domain mvt:Auteur .
+
+# ---------------------------------------------------------------------------
+# Propriétés — Thème
+# ---------------------------------------------------------------------------
+
+mvt:themeParent a rdf:Property ;
+    rdfs:label "Thème parent"@fr ;
+    rdfs:comment "Thème plus général dont celui-ci est un sous-thème, pour construire une arborescence de thèmes."@fr ;
+    rdfs:domain mvt:Theme ;
+    rdfs:range mvt:Theme .
