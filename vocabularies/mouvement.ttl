@@ -24,9 +24,19 @@
 # Classes
 # ---------------------------------------------------------------------------
 
+mvt:Document a owl:Class ;
+    rdfs:label "Document"@fr ;
+    rdfs:comment "Classe abstraite regroupant toute ressource documentaire indexée (étude du mouvement ou article/ouvrage externe reproduit), pour permettre thème, période et liens précède/corrige communs aux deux."@fr .
+
 mvt:Etude a owl:Class ;
+    rdfs:subClassOf mvt:Document ;
     rdfs:label "Étude"@fr ;
-    rdfs:comment "Une étude individuelle produite au sein du mouvement."@fr .
+    rdfs:comment "Une étude individuelle produite au sein du mouvement (enseignement propre du mouvement, par un de ses intervenants)."@fr .
+
+mvt:ArticleOuvrage a owl:Class ;
+    rdfs:subClassOf mvt:Document ;
+    rdfs:label "Article / Ouvrage"@fr ;
+    rdfs:comment "Document historique ou externe (sermon, manuscrit, article) dont l'auteur original est extérieur au mouvement, reproduit ou traduit intégralement par celui-ci (ex. sermon d'A.T. Jones, manuscrit d'Ellen G. White). Catégorie distincte de mvt:Etude : le contenu n'est pas un enseignement produit par le mouvement lui-même, même s'il est indexé comme pièce à part entière du corpus. L'assistant IA doit toujours signaler un extrait provenant de cette classe comme source historique/externe reproduite, jamais comme enseignement propre du mouvement."@fr .
 
 mvt:Auteur a owl:Class ;
     rdfs:label "Auteur"@fr ;
@@ -41,41 +51,41 @@ mvt:Periode a owl:Class ;
     rdfs:comment "Période ou phase d'enseignement identifiable dans l'histoire du mouvement."@fr .
 
 # ---------------------------------------------------------------------------
-# Propriétés — Étude
+# Propriétés — Document (Étude et Article/Ouvrage)
 # ---------------------------------------------------------------------------
 
 mvt:theme a rdf:Property ;
     rdfs:label "Thème"@fr ;
-    rdfs:comment "Thème(s) abordé(s) par cette étude."@fr ;
-    rdfs:domain mvt:Etude ;
+    rdfs:comment "Thème(s) abordé(s) par ce document."@fr ;
+    rdfs:domain mvt:Document ;
     rdfs:range mvt:Theme .
 
 mvt:periode a rdf:Property ;
     rdfs:label "Période"@fr ;
-    rdfs:comment "Période d'enseignement à laquelle rattacher cette étude."@fr ;
-    rdfs:domain mvt:Etude ;
+    rdfs:comment "Période d'enseignement à laquelle rattacher ce document."@fr ;
+    rdfs:domain mvt:Document ;
     rdfs:range mvt:Periode .
 
 mvt:messageCle a rdf:Property ;
     rdfs:label "Message clé"@fr ;
-    rdfs:comment "Formulation courte du message enseigné dans cette étude sur le thème traité. Sert d'ancrage pour la recherche sémantique et le suivi d'évolution du message."@fr ;
+    rdfs:comment "Formulation courte du message enseigné dans cette étude sur le thème traité. Sert d'ancrage pour la recherche sémantique et le suivi d'évolution du message. Ne s'applique en pratique qu'à mvt:Etude — un mvt:ArticleOuvrage n'enseigne pas un message du mouvement, il en est une source."@fr ;
     rdfs:domain mvt:Etude .
 
 mvt:precede a rdf:Property ;
-    rdfs:label "Prolonge l'étude"@fr ;
-    rdfs:comment "Lien vers une étude antérieure que celle-ci prolonge, précise ou complète."@fr ;
-    rdfs:domain mvt:Etude ;
-    rdfs:range mvt:Etude .
+    rdfs:label "Prolonge"@fr ;
+    rdfs:comment "Lien vers un document antérieur (étude ou article/ouvrage) que celui-ci prolonge, précise ou complète — permet par exemple de lier une étude du mouvement à l'article/ouvrage externe sur lequel elle s'appuie."@fr ;
+    rdfs:domain mvt:Document ;
+    rdfs:range mvt:Document .
 
 mvt:corrige a rdf:Property ;
-    rdfs:label "Corrige l'étude"@fr ;
-    rdfs:comment "Lien vers une étude antérieure dont cette étude corrige ou nuance le contenu. Champ clé pour tracer l'évolution du message dans le temps."@fr ;
-    rdfs:domain mvt:Etude ;
-    rdfs:range mvt:Etude .
+    rdfs:label "Corrige"@fr ;
+    rdfs:comment "Lien vers un document antérieur (étude ou article/ouvrage) dont celui-ci corrige ou nuance le contenu. Champ clé pour tracer l'évolution du message dans le temps."@fr ;
+    rdfs:domain mvt:Document ;
+    rdfs:range mvt:Document .
 
 mvt:citationExterne a rdf:Property ;
     rdfs:label "Citation externe"@fr ;
-    rdfs:comment "Référence à une source extérieure au mouvement, explicitement citée dans cette étude. Seule catégorie de source externe que l'assistant IA de la bibliothèque est autorisé à restituer, et toujours en la signalant comme telle."@fr ;
+    rdfs:comment "Référence à une source extérieure au mouvement, explicitement citée à l'intérieur d'une étude (mention ponctuelle, pas le document lui-même — voir mvt:ArticleOuvrage pour le cas où le document entier est d'origine externe). Seule catégorie de source externe que l'assistant IA de la bibliothèque est autorisé à restituer depuis une mvt:Etude, et toujours en la signalant comme telle."@fr ;
     rdfs:domain mvt:Etude .
 
 # ---------------------------------------------------------------------------

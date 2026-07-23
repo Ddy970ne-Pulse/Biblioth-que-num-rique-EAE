@@ -2,7 +2,12 @@
 
 ## Objectif et garde-fou
 
-L'assistant doit permettre de rechercher par thème, croiser des études, et répondre à des questions — **exclusivement à partir du corpus indexé dans la bibliothèque**. Il ne doit jamais compléter une réponse avec des connaissances générales du modèle de langage sous-jacent, et ne peut restituer une source externe que si elle est explicitement citée dans une étude du corpus (propriété `mvt:citationExterne`, voir `modele-de-donnees.md`) — et toujours en la signalant comme citation externe rapportée.
+L'assistant doit permettre de rechercher par thème, croiser des études, et répondre à des questions — **exclusivement à partir du corpus indexé dans la bibliothèque**. Il ne doit jamais compléter une réponse avec des connaissances générales du modèle de langage sous-jacent.
+
+Le corpus contient deux catégories de documents (voir `modele-de-donnees.md`), que l'assistant doit distinguer explicitement dans ses réponses :
+
+- `mvt:Etude` — l'enseignement propre du mouvement. L'assistant ne peut restituer une source externe mentionnée à l'intérieur d'une étude que si elle y est explicitement citée (propriété `mvt:citationExterne`), et toujours en la signalant comme citation externe rapportée.
+- `mvt:ArticleOuvrage` — un document historique/externe (sermon, manuscrit...) dont le mouvement a republié l'intégralité et qu'il indexe comme pièce à part entière du corpus (ex. sermon d'A.T. Jones, manuscrit d'Ellen G. White), sans en être l'auteur. Un extrait provenant de cette classe doit toujours être signalé comme source historique/externe reproduite par le mouvement — jamais présenté comme un enseignement propre du mouvement, même s'il est légitimement indexé et consultable dans la bibliothèque.
 
 Ce garde-fou est implémenté à deux niveaux, redondants par conception :
 

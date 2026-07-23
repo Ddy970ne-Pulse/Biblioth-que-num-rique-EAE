@@ -91,14 +91,15 @@ class AnswerService
             if ($entry['score'] < self::RELEVANCE_THRESHOLD) {
                 continue;
             }
-            $title = $this->itemTitle($entry['item_id']);
-            if ($title === null) {
+            $meta = $this->itemMeta($entry['item_id']);
+            if ($meta === null) {
                 // L'item a pu être supprimé depuis la dernière indexation.
                 continue;
             }
             $results[] = [
                 'item_id' => $entry['item_id'],
-                'title' => $title,
+                'title' => $meta['title'],
+                'resourceClass' => $meta['resourceClass'],
                 'content' => $entry['content'],
                 'score' => $entry['score'],
             ];
@@ -150,18 +151,21 @@ class AnswerService
         $context = '';
         foreach ($matches as $i => $match) {
             $n = $i + 1;
-            $context .= "[Source {$n} — \"{$match['title']}\"]\n{$match['content']}\n\n";
+            $isExternal = $match['resourceClass'] === 'Article / Ouvrage';
+            $kind = $isExternal ? 'ARTICLE/OUVRAGE EXTERNE reproduit par le mouvement' : 'Étude du mouvement';
+            $context .= "[Source {$n} — \"{$match['title']}\" — {$kind}]\n{$match['content']}\n\n";
         }
 
         $systemPrompt = <<<PROMPT
 Tu es l'assistant de recherche d'une bibliothèque numérique consacrée aux enseignements d'un mouvement.
 
 Règles impératives :
-1. Tu ne dois répondre qu'à partir des extraits fournis ci-dessous, qui proviennent tous d'études du corpus interne de la bibliothèque. N'utilise JAMAIS de connaissances générales extérieures à ces extraits, même si tu les connais par ailleurs.
+1. Tu ne dois répondre qu'à partir des extraits fournis ci-dessous, qui proviennent tous du corpus interne de la bibliothèque. N'utilise JAMAIS de connaissances générales extérieures à ces extraits, même si tu les connais par ailleurs.
 2. Si les extraits fournis ne permettent pas de répondre à la question, dis-le explicitement plutôt que de généraliser ou de combler les manques.
 3. Pour chaque affirmation de ta réponse, indique entre parenthèses la source dont elle provient (ex. "(Source 2)").
-4. Si un extrait rapporte lui-même une citation d'une source externe au mouvement, tu peux la restituer, mais uniquement en la signalant clairement comme « citation externe rapportée par [la source interne] » — ne la présente jamais comme faisant partie du message enseigné par le mouvement lui-même.
-5. Réponds en français, de façon claire et directement utile, sans préambule.
+4. Chaque source est annotée de sa nature : « Étude du mouvement » ou « ARTICLE/OUVRAGE EXTERNE reproduit par le mouvement ». Une source marquée ARTICLE/OUVRAGE EXTERNE n'est pas un enseignement du mouvement lui-même (ex. un sermon ou manuscrit d'un auteur historique republié par le mouvement) : si tu t'appuies dessus, signale-le explicitement comme tel (ex. « selon un article externe reproduit par le mouvement, [Source X] »), ne la présente jamais comme faisant partie du message propre du mouvement.
+5. Si un extrait d'une étude du mouvement rapporte lui-même une citation d'une source externe (mention ponctuelle, distincte du cas précédent), tu peux la restituer, mais uniquement en la signalant clairement comme « citation externe rapportée par [la source interne] ».
+6. Réponds en français, de façon claire et directement utile, sans préambule.
 PROMPT;
 
         $userPrompt = "Extraits du corpus :\n\n{$context}\nQuestion : {$query}";
@@ -198,16 +202,27 @@ PROMPT;
             $sources[] = [
                 'item_id' => $match['item_id'],
                 'title' => $match['title'],
+                'resourceClass' => $match['resourceClass'],
             ];
         }
         return $sources;
     }
 
-    private function itemTitle(int $itemId): ?string
+    /**
+     * @return array{title:string, resourceClass:?string}|null
+     */
+    private function itemMeta(int $itemId): ?array
     {
         try {
             $item = $this->api->read('items', $itemId)->getContent();
-            return $item->displayTitle();
+            $resourceClass = $item->resourceClass();
+            return [
+                'title' => $item->displayTitle(),
+                // Ex. "mvt:Etude" ou "mvt:ArticleOuvrage" — voir docs/modele-de-donnees.md.
+                // Un item sans classe assignée (corpus non encore entièrement typé) revient
+                // à null ; generate() le traite alors comme une étude par défaut.
+                'resourceClass' => $resourceClass ? $resourceClass->label() : null,
+            ];
         } catch (\Exception $e) {
             return null;
         }

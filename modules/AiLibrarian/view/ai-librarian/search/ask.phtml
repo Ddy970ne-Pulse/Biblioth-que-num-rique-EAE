@@ -26,10 +26,15 @@ $this->headTitle('Assistant de recherche — Bibliothèque numérique');
             <p><?= nl2br($this->escapeHtml($answer['answer'])) ?></p>
 
             <?php if (!empty($answer['sources'])): ?>
-                <h3>Études citées</h3>
+                <h3>Sources citées</h3>
                 <ul>
                     <?php foreach ($answer['sources'] as $source): ?>
-                        <li><?= $this->escapeHtml($source['title']) ?></li>
+                        <li>
+                            <?= $this->escapeHtml($source['title']) ?>
+                            <?php if (($source['resourceClass'] ?? null) === 'Article / Ouvrage'): ?>
+                                <span class="ai-librarian-source-external">— article/ouvrage externe reproduit par le mouvement</span>
+                            <?php endif; ?>
+                        </li>
                     <?php endforeach; ?>
                 </ul>
             <?php endif; ?>
