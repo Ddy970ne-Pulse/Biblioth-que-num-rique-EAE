@@ -2199,7 +2199,8 @@ const DATA = {
       "fichier": "a62b6ab2-1994-10-article-revue-adventiste.md",
       "a_raffiner": false,
       "pdfLocal": "file:///D:\\Google Drive\\Eden A Eden\\Articles\\1994-10-article-revue-adventiste.pdf",
-      "pdfCloud": "https://firebasestorage.googleapis.com/v0/b/bibliotheque-rag.firebasestorage.app/o/pdfs%2FArticles%2F1994-10-article-revue-adventiste.pdf?alt=media"
+      "pdfCloud": "https://firebasestorage.googleapis.com/v0/b/bibliotheque-rag.firebasestorage.app/o/pdfs%2FArticles%2F1994-10-article-revue-adventiste.pdf?alt=media",
+      "a_sourcer": true
     },
     {
       "titre": "Pourquoi Prophetie",
@@ -2217,7 +2218,8 @@ const DATA = {
       "fichier": "64b9fe39-2009-01-notes-cme-pourquoi-la-prophetie.md",
       "a_raffiner": false,
       "pdfLocal": "file:///D:\\Google Drive\\Eden A Eden\\Articles\\2009-01-notes-cme-pourquoi-la-prophetie.pdf",
-      "pdfCloud": "https://firebasestorage.googleapis.com/v0/b/bibliotheque-rag.firebasestorage.app/o/pdfs%2FArticles%2F2009-01-notes-cme-pourquoi-la-prophetie.pdf?alt=media"
+      "pdfCloud": "https://firebasestorage.googleapis.com/v0/b/bibliotheque-rag.firebasestorage.app/o/pdfs%2FArticles%2F2009-01-notes-cme-pourquoi-la-prophetie.pdf?alt=media",
+      "a_sourcer": true
     },
     {
       "titre": "Revue Adventiste",
@@ -2235,7 +2237,8 @@ const DATA = {
       "fichier": "a466155d-1994-10-article-revue-adventiste.md",
       "a_raffiner": false,
       "pdfLocal": "file:///D:\\Google Drive\\Eden A Eden\\Articles\\1994-10-article-revue-adventiste.pdf",
-      "pdfCloud": "https://firebasestorage.googleapis.com/v0/b/bibliotheque-rag.firebasestorage.app/o/pdfs%2FArticles%2F1994-10-article-revue-adventiste.pdf?alt=media"
+      "pdfCloud": "https://firebasestorage.googleapis.com/v0/b/bibliotheque-rag.firebasestorage.app/o/pdfs%2FArticles%2F1994-10-article-revue-adventiste.pdf?alt=media",
+      "a_sourcer": true
     },
     {
       "titre": "Pourquoi Prophetie",
@@ -2253,7 +2256,8 @@ const DATA = {
       "fichier": "7448b330-2009-01-notes-cme-pourquoi-la-prophetie.md",
       "a_raffiner": false,
       "pdfLocal": "file:///D:\\Google Drive\\Eden A Eden\\Articles\\2009-01-notes-cme-pourquoi-la-prophetie.pdf",
-      "pdfCloud": "https://firebasestorage.googleapis.com/v0/b/bibliotheque-rag.firebasestorage.app/o/pdfs%2FArticles%2F2009-01-notes-cme-pourquoi-la-prophetie.pdf?alt=media"
+      "pdfCloud": "https://firebasestorage.googleapis.com/v0/b/bibliotheque-rag.firebasestorage.app/o/pdfs%2FArticles%2F2009-01-notes-cme-pourquoi-la-prophetie.pdf?alt=media",
+      "a_sourcer": true
     },
     {
       "titre": "Une Forme Plus Pure De La Liberté",
@@ -5361,7 +5365,8 @@ const DATA = {
       "fichier": "d5e9659c-2018-10-notes-tl-cri-de-minuit-04-pyrrhus.md",
       "a_raffiner": false,
       "pdfLocal": "file:///D:\\Google Drive\\Eden A Eden\\Notes\\2018-10-notes-tl-cri-de-minuit-04-pyrrhus.pdf",
-      "pdfCloud": "https://firebasestorage.googleapis.com/v0/b/bibliotheque-rag.firebasestorage.app/o/pdfs%2FNotes%2F2018-10-notes-tl-cri-de-minuit-04-pyrrhus.pdf?alt=media"
+      "pdfCloud": "https://firebasestorage.googleapis.com/v0/b/bibliotheque-rag.firebasestorage.app/o/pdfs%2FNotes%2F2018-10-notes-tl-cri-de-minuit-04-pyrrhus.pdf?alt=media",
+      "a_sourcer": true
     },
     {
       "titre": "Cri Minuit Pyrrhus Est Poutine",
@@ -5379,7 +5384,8 @@ const DATA = {
       "fichier": "55729d41-2018-10-notes-tl-cri-de-minuit-05-pyrrhus-est-poutine.md",
       "a_raffiner": false,
       "pdfLocal": "file:///D:\\Google Drive\\Eden A Eden\\Notes\\2018-10-notes-tl-cri-de-minuit-05-pyrrhus-est-poutine.pdf",
-      "pdfCloud": "https://firebasestorage.googleapis.com/v0/b/bibliotheque-rag.firebasestorage.app/o/pdfs%2FNotes%2F2018-10-notes-tl-cri-de-minuit-05-pyrrhus-est-poutine.pdf?alt=media"
+      "pdfCloud": "https://firebasestorage.googleapis.com/v0/b/bibliotheque-rag.firebasestorage.app/o/pdfs%2FNotes%2F2018-10-notes-tl-cri-de-minuit-05-pyrrhus-est-poutine.pdf?alt=media",
+      "a_sourcer": true
     },
     {
       "titre": "Cri Minuit Pyrrhus Guerres Mondiales",
@@ -9567,7 +9573,8 @@ function renderResults() {
     if (d.pdf && !brokenPdf) badges += `<span class="status-badge pdf-ok"><span class="status-dot"></span>PDF</span>`;
     else if (d.pdf && brokenPdf) badges += `<span class="status-badge pdf-missing">PDF signalé</span>`;
     if (d.youtube && !brokenVideo) badges += `<span class="status-badge video-ok"><span class="status-dot"></span>Vidéo</span>`;
-    if (!d.pdf && !d.youtube && !d.pdfLocal && !d.pdfCloud) badges += `<span class="status-badge pdf-missing">Sans source</span>`;
+    if (d.a_sourcer) badges += `<span class="status-badge pdf-missing">🔍 À sourcer</span>`;
+    else if (!d.pdf && !d.youtube && !d.pdfLocal && !d.pdfCloud) badges += `<span class="status-badge pdf-missing">Sans source</span>`;
     if (d.pdfCloud) badges += `<span class="status-badge pdf-ok"><span class="status-dot"></span>PDF</span>`;
     else if (d.pdfLocal) badges += `<span class="status-badge pdf-ok"><span class="status-dot"></span>PDF local</span>`;
     if (d.a_raffiner) badges += `<span class="status-badge raffiner">à raffiner</span>`;
