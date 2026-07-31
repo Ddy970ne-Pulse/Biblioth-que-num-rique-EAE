@@ -103,11 +103,13 @@
   .kpi {
     background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
     padding: 20px; transition: transform 0.15s, box-shadow 0.15s;
+    display: flex; flex-direction: column; align-items: flex-start;
+    overflow: hidden; min-width: 0;
   }
   .kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
-  .kpi .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-bottom: 4px; }
-  .kpi .val { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
-  .kpi .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .kpi .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-bottom: 4px; display: block; width: 100%; word-break: break-word; }
+  .kpi .val { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; display: block; width: 100%; line-height: 1.1; }
+  .kpi .sub { font-size: 12px; color: var(--muted); margin-top: 4px; display: block; width: 100%; word-break: break-word; }
   .kpi.ok .val { color: var(--ok); }
   .kpi.warn .val { color: var(--warn); }
   .kpi.danger .val { color: var(--danger); }
@@ -343,7 +345,7 @@
     <div class="nav-section">
       <div class="nav-title">Accès</div>
       <div class="nav-item" data-filter-view="pdf"><span><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></span> Avec PDF<span class="count" id="nav-count-pdf">–</span></div>
-      <div class="nav-item" data-filter-view="video"><span>▶️</span> Avec vidéo<span class="count" id="nav-count-video">–</span></div>
+      <div class="nav-item" data-filter-view="video"><span><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;"><polygon points="6 3 20 12 6 21 6 3"/></svg></span> Avec vidéo<span class="count" id="nav-count-video">–</span></div>
       <div class="nav-item" data-filter-view="missing"><span><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>️</span> Sans source<span class="count" id="nav-count-missing">–</span></div>
     </div>
 
@@ -9342,7 +9344,7 @@ const THEME_KEY = 'eae-theme';
 function setTheme(t) {
   document.documentElement.setAttribute('data-theme', t);
   localStorage.setItem(THEME_KEY, t);
-  document.getElementById('theme-icon').textContent = t === 'dark' ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>️' : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+  document.getElementById('theme-icon').innerHTML = t === 'dark' ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>️' : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
   document.getElementById('theme-label').textContent = t === 'dark' ? 'Mode clair' : 'Mode sombre';
 }
 function toggleTheme() { setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); }
@@ -9657,10 +9659,10 @@ function openDrawer(d) {
     vidP.innerHTML = ytId ?
       `<div style="position:relative;padding-top:56.25%;"><iframe style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;border-radius:8px;" src="https://www.youtube.com/embed/${ytId}" allowfullscreen title="Vidéo"></iframe></div>
        <div style="margin-top:12px;font-size:12px;color:var(--muted);">Si la vidéo n'apparaît pas ou affiche "Vidéo non disponible", elle a probablement été retirée par son propriétaire. Utilisez le bouton "Signaler" ci-dessous.</div>` :
-      `<a href="${d.youtube}" target="_blank" class="btn primary">▶ Ouvrir sur YouTube</a>`;
+      `<a href="${d.youtube}" target="_blank" class="btn primary"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;"><polygon points="6 3 20 12 6 21 6 3"/></svg> Ouvrir sur YouTube</a>`;
   } else {
     vidP.innerHTML = `<div class="unavailable-notice">
-      <div class="icon">▶️</div>
+      <div class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;"><polygon points="6 3 20 12 6 21 6 3"/></svg></div>
       <h4>Vidéo non disponible</h4>
       <p>${d.youtube ? 'Cette vidéo a été signalée comme cassée ou retirée.' : "Aucune vidéo YouTube n'est associée à ce document."}</p>
     </div>`;
@@ -9671,7 +9673,7 @@ function openDrawer(d) {
   let btns = '';
   if (d.pdf) btns += `<a class="btn primary" href="${d.pdf}" target="_blank"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg> Ouvrir le PDF</a>`;
   if (d.pdf) btns += `<a class="btn" href="${d.pdf}" download>⬇ Télécharger</a>`;
-  if (d.youtube) btns += `<a class="btn" href="${d.youtube}" target="_blank">▶ Voir sur YouTube</a>`;
+  if (d.youtube) btns += `<a class="btn" href="${d.youtube}" target="_blank"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;"><polygon points="6 3 20 12 6 21 6 3"/></svg> Voir sur YouTube</a>`;
   if (d.pdfCloud) btns += `<a class="btn primary" href="${escapeHtml(d.pdfCloud)}" target="_blank"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg> Ouvrir le PDF</a>`;
   else if (d.pdfLocal) btns += `<a class="btn primary" href="${escapeHtml(d.pdfLocal)}" target="_blank"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg> Ouvrir le PDF (copie locale)</a>`;
   btns += `<div style="flex:1;"></div>`;
@@ -10511,7 +10513,7 @@ function buildFiche(raw, query, matches, byYear, years, totalOcc, analysis) {
       </div>
       <div class="doc-actions">
         ${m.doc.p ? `<a class="btn primary" style="padding:4px 8px;font-size:11px;" href="${m.doc.p}" target="_blank" onclick="event.stopPropagation();"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></a>` : ''}
-        ${m.doc.v ? `<a class="btn" style="padding:4px 8px;font-size:11px;color:var(--danger);" href="${m.doc.v}" target="_blank" onclick="event.stopPropagation();">▶</a>` : ''}
+        ${m.doc.v ? `<a class="btn" style="padding:4px 8px;font-size:11px;color:var(--danger);" href="${m.doc.v}" target="_blank" onclick="event.stopPropagation();"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;"><polygon points="6 3 20 12 6 21 6 3"/></svg></a>` : ''}
       </div>
     </div>
   `).join('');
