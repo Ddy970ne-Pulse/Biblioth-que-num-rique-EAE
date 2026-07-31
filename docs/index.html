@@ -10012,7 +10012,14 @@ function exploreConcept() {
   } else if (cached) {
     topHtml = buildCachedAICard(cached, matches);
   } else {
-    topHtml = buildGenerateCTA(raw, matches.length);
+    // Affichage temporaire : loader pendant qu'on vérifie le cache Firestore
+    topHtml = `
+      <div class="fiche" style="border-left:6px solid var(--brand);text-align:center;background:linear-gradient(135deg, rgba(124,61,19,0.06), rgba(74,103,65,0.03));margin-bottom:24px;padding:32px;" id="firestore-check-slot">
+        <div style="font-size:28px;margin-bottom:8px;">⚡</div>
+        <div style="color:var(--muted);font-size:14px;">Vérification du cache partagé...</div>
+      </div>`;
+    // Lancer le check async : si en cache Firestore, affiche la synthèse ; sinon affiche le CTA
+    setTimeout(() => checkFirestoreCacheAndRender(raw, matches), 50);
   }
   out.innerHTML = topHtml + fiche;
   window.scrollTo({top: document.getElementById('concept-output').offsetTop - 80, behavior:'smooth'});
@@ -10316,8 +10323,8 @@ function buildGenerateCTA(rawQuery, matchCount) {
       <h2 style="margin:0 0 8px;color:var(--brand);font-size:20px;">Aucun compte rendu académique n'existe encore pour ce concept</h2>
       <p style="color:var(--ink-2);font-size:14px;max-width:600px;margin:8px auto 20px;">Un compte rendu structuré de 2000 à 4000 mots peut être rédigé maintenant par Claude à partir des ${matchCount} passages du corpus. Il sera sauvegardé localement pour tes prochaines visites.</p>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-        <button class="btn primary" onclick="generateAISynthesis('${rawQuery.replace(/'/g,"\\'")}', 'haiku')" style="font-size:14px;padding:12px 24px;">🧠 Générer le compte rendu (~0,005€, 10 sec)</button>
-        <button class="btn subtle" onclick="generateAISynthesis('${rawQuery.replace(/'/g,"\\'")}', 'sonnet')" style="font-size:13px;padding:10px 20px;">Version approfondie Sonnet (~0,03€, 60 sec)</button>
+        <button class="btn primary" onclick="generateAISynthesis('${rawQuery.replace(/'/g,"\\'")}', 'haiku')" style="font-size:14px;padding:12px 24px;">🧠 Générer le compte rendu</button>
+        <button class="btn subtle" onclick="generateAISynthesis('${rawQuery.replace(/'/g,"\\'")}', 'sonnet')" style="font-size:13px;padding:10px 20px;">Version approfondie</button>
       </div>
     </div>
   `;
@@ -10332,6 +10339,57 @@ function regenerateSynthesis(concept, model) {
   generateAISynthesis(concept, model || 'sonnet');
 }
 window.regenerateSynthesis = regenerateSynthesis;
+
+// === V7 : Auto-check Firestore avant d'afficher le CTA "Générer" ===
+async function checkFirestoreCacheAndRender(rawQuery, matches) {
+  const slot = document.getElementById('firestore-check-slot');
+  if (!slot) return;
+  try {
+    // Envoie au moins 1 extrait pour respecter la validation Cloud Function,
+    // mais avec check_only:true → la fonction consulte le cache Firestore et renvoie 404 si absent (sans appeler Anthropic, donc 0€)
+    const oneExtract = matches[0] ? [{
+      titre: matches[0].doc.t || '',
+      auteur: matches[0].doc.a || '',
+      date: matches[0].doc.d || '',
+      texte: (matches[0].doc.x || '').substring(0, 200)
+    }] : [{titre: 'stub', auteur: '', date: '', texte: 'stub'}];
+    const resp = await fetch(RAG_ENDPOINT, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        question: `Peux-tu produire un compte rendu académique complet sur le concept « ${rawQuery} » selon la compréhension actuelle du mouvement, avec son évolution depuis l'origine du corpus jusqu'à aujourd'hui ?`,
+        extraits: oneExtract,
+        model: 'haiku',
+        check_only: true
+      })
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.synthese) {
+        // Cache hit : sauvegarder localement pour prochaine visite instantanée
+        const cache = getAICache();
+        cache[norm(rawQuery)] = {
+          concept: rawQuery,
+          synthese: data.synthese,
+          model_used: data.model_used || 'cached',
+          source: data.source || 'firestore',
+          timestamp: data.timestamp || Date.now(),
+          tokens: data.tokens
+        };
+        saveAICache(cache);
+        // Remplacer le slot par la carte cached
+        slot.outerHTML = buildCachedAICard(cache[norm(rawQuery)], matches);
+        return;
+      }
+    }
+    // Cache miss (404 ou autre) : afficher le CTA "Générer"
+    slot.outerHTML = buildGenerateCTA(rawQuery, matches.length);
+  } catch (e) {
+    // Erreur réseau : afficher le CTA
+    slot.outerHTML = buildGenerateCTA(rawQuery, matches.length);
+  }
+}
+window.checkFirestoreCacheAndRender = checkFirestoreCacheAndRender;
 
 function reportDivergence(concept) {
   const comment = prompt('Décris en quoi la synthèse ne reflète pas la compréhension actuelle du mouvement :');
@@ -10529,8 +10587,8 @@ function buildFiche(raw, query, matches, byYear, years, totalOcc, analysis) {
 
       <div class="actions-bar">
         <button class="btn primary" onclick="window.print()">🖨️ Imprimer / PDF</button>
-        <button class="btn primary" onclick="generateAISynthesis('${escR}', 'haiku')">🧠 Générer synthèse IA (~0,005€, 10 sec)</button>
-        <button class="btn subtle" onclick="generateAISynthesis('${escR}', 'sonnet')">Approfondir avec Sonnet (~0,03€, 60 sec)</button>
+        <button class="btn primary" onclick="generateAISynthesis('${escR}', 'haiku')">🧠 Générer synthèse IA</button>
+        <button class="btn subtle" onclick="generateAISynthesis('${escR}', 'sonnet')">Approfondir</button>
         <button class="btn subtle" onclick="copyClaudePrompt('${escR}')">📋 Copier prompt manuel</button>
         <button class="btn" onclick="exportConceptCSV('${escR}')">⬇ Export CSV</button>
         <button class="btn subtle" onclick="document.getElementById('concept-input').value='';document.getElementById('concept-input').focus();document.getElementById('concept-output').innerHTML='';">🔄 Nouvelle recherche</button>
@@ -10858,7 +10916,7 @@ async function generateAISynthesis(rawQuery, model = 'haiku') {
       </div>
       <div id="ai-synthese-content" style="font-size:14px;line-height:1.65;color:var(--ink);"><p>${syntheseHtml}</p></div>
       <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);">
-        ${extraits.length} extraits · ${data.tokens?.input || '?'} tokens in · ${data.tokens?.output || '?'} tokens out · ${dt}s · coût ≈ ${(data.model_used?.includes('haiku') ? (data.tokens?.input * 0.00000025 + data.tokens?.output * 0.00000125) : (data.tokens?.input * 0.000003 + data.tokens?.output * 0.000015)).toFixed(5)} $
+        ${extraits.length} extraits · ${dt}s
       </div>
       <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn" onclick="navigator.clipboard.writeText(document.getElementById('ai-synthese-content').innerText);toast('Synthèse copiée');">📋 Copier</button>
