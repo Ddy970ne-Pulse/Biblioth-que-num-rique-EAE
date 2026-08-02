@@ -467,21 +467,104 @@ Formate ta réponse en JSON strict, rien d'autre :
   $("#plan-loader").classList.add("hidden");
   renderPlan();
 }
+let _dragIdx = null;
+
 function renderPlan() {
   const container = $("#plan-chapters");
   container.innerHTML = "";
   study.plan.forEach((chap, i) => {
     const div = document.createElement("div");
     div.className = "chapter";
+    div.draggable = true;
+    div.dataset.idx = i;
     div.innerHTML = `
-      <span class="drag">⋮⋮</span>
+      <span class="drag" title="Glisser pour réordonner" style="cursor:grab;user-select:none;font-size:16px;color:#7c3d13;">⋮⋮</span>
       <span class="n">${i+1}.</span>
       <input type="text" value="${chap.title.replace(/"/g,'&quot;')}" onchange="study.plan[${i}].title=this.value">
+      <span style="display:inline-flex;gap:4px;margin-right:6px;">
+        <button type="button" onclick="moveChapter(${i}, ${i-1})" ${i === 0 ? "disabled" : ""} title="Monter" style="border:1px solid #ccc;background:#fff;border-radius:3px;padding:2px 8px;cursor:pointer;font-size:12px;${i === 0 ? "opacity:0.3;cursor:not-allowed;" : ""}">▲</button>
+        <button type="button" onclick="moveChapter(${i}, ${i+1})" ${i === study.plan.length - 1 ? "disabled" : ""} title="Descendre" style="border:1px solid #ccc;background:#fff;border-radius:3px;padding:2px 8px;cursor:pointer;font-size:12px;${i === study.plan.length - 1 ? "opacity:0.3;cursor:not-allowed;" : ""}">▼</button>
+      </span>
       <span class="remove" onclick="removeChapter(${i})" title="Supprimer">×</span>
     `;
+    // ==== Drag & Drop natif ====
+    div.addEventListener("dragstart", (e) => {
+      _dragIdx = i;
+      div.style.opacity = "0.4";
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", String(i));
+    });
+    div.addEventListener("dragend", () => {
+      div.style.opacity = "1";
+      document.querySelectorAll(".chapter").forEach(el => {
+        el.style.borderTop = "";
+        el.style.borderBottom = "";
+      });
+    });
+    div.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      if (_dragIdx === null || _dragIdx === i) return;
+      const rect = div.getBoundingClientRect();
+      const midpoint = rect.top + rect.height / 2;
+      if (e.clientY < midpoint) {
+        div.style.borderTop = "3px solid #7c3d13";
+        div.style.borderBottom = "";
+      } else {
+        div.style.borderBottom = "3px solid #7c3d13";
+        div.style.borderTop = "";
+      }
+    });
+    div.addEventListener("dragleave", () => {
+      div.style.borderTop = "";
+      div.style.borderBottom = "";
+    });
+    div.addEventListener("drop", (e) => {
+      e.preventDefault();
+      div.style.borderTop = "";
+      div.style.borderBottom = "";
+      if (_dragIdx === null || _dragIdx === i) return;
+      const rect = div.getBoundingClientRect();
+      const midpoint = rect.top + rect.height / 2;
+      let target = i;
+      // Si on drop au-dessus du milieu et que _dragIdx > i → target = i
+      // Si on drop en dessous et que _dragIdx < i → target = i (car la position se décale)
+      if (e.clientY >= midpoint && _dragIdx > i) target = i + 1;
+      if (e.clientY < midpoint && _dragIdx < i) target = i - 1;
+      moveChapter(_dragIdx, target);
+      _dragIdx = null;
+    });
     container.appendChild(div);
   });
 }
+
+function moveChapter(from, to) {
+  if (from === to) return;
+  if (to < 0 || to >= study.plan.length) return;
+  // Bundle plan + sources + chapters pour garder l'alignement
+  const items = study.plan.map((chap, i) => ({
+    plan: chap,
+    sources: (study.sources && study.sources[i]) ? [...study.sources[i]] : [],
+    chapter: (study.chapters && study.chapters[i]) ? {...study.chapters[i]} : {},
+  }));
+  const [moved] = items.splice(from, 1);
+  items.splice(to, 0, moved);
+  study.plan = items.map(it => it.plan);
+  study.sources = {};
+  study.chapters = {};
+  items.forEach((it, i) => {
+    if (it.sources && it.sources.length) study.sources[i] = it.sources;
+    if (it.chapter && (it.chapter.text || it.chapter.generated)) study.chapters[i] = it.chapter;
+  });
+  // Ajuster currentChapter
+  if (typeof study.currentChapter === "number") {
+    if (study.currentChapter === from) study.currentChapter = to;
+    else if (from < to && study.currentChapter > from && study.currentChapter <= to) study.currentChapter--;
+    else if (from > to && study.currentChapter >= to && study.currentChapter < from) study.currentChapter++;
+  }
+  renderPlan();
+}
+
 function addChapter() {
   study.plan.push({title: "Nouveau chapitre", description: ""});
   renderPlan();
@@ -489,6 +572,21 @@ function addChapter() {
 function removeChapter(i) {
   if (study.plan.length <= 2) { toast("Il faut au moins 2 chapitres."); return; }
   study.plan.splice(i, 1);
+  // Aussi retirer les sources et chapters associés + décaler les indices > i
+  const newSources = {};
+  const newChapters = {};
+  Object.keys(study.sources || {}).forEach(k => {
+    const idx = parseInt(k);
+    if (idx < i) newSources[idx] = study.sources[k];
+    else if (idx > i) newSources[idx - 1] = study.sources[k];
+  });
+  Object.keys(study.chapters || {}).forEach(k => {
+    const idx = parseInt(k);
+    if (idx < i) newChapters[idx] = study.chapters[k];
+    else if (idx > i) newChapters[idx - 1] = study.chapters[k];
+  });
+  study.sources = newSources;
+  study.chapters = newChapters;
   renderPlan();
 }
 
