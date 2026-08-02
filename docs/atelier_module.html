@@ -439,6 +439,7 @@ Formate ta réponse en JSON strict, rien d'autre :
   {"title": "Titre chapitre 1", "description": "phrase de description"},
   {"title": "Titre chapitre 2", "description": "phrase de description"}
 ]`;
+  let rawResponse = "";
   try {
     const resp = await fetch(ASK_ENDPOINT, {
       method: "POST",
@@ -450,8 +451,9 @@ Formate ta réponse en JSON strict, rien d'autre :
       })
     });
     const data = await resp.json();
+    rawResponse = data.synthese || "";
     // Parser le JSON du plan (Claude peut renvoyer du texte autour)
-    let planText = (data.synthese || "").trim();
+    let planText = rawResponse.trim();
     // Priorité 1 : bloc ```json ... ```
     let m = planText.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/);
     if (m) planText = m[1];
@@ -469,7 +471,7 @@ Formate ta réponse en JSON strict, rien d'autre :
     study.plan = JSON.parse(planText);
     if (!Array.isArray(study.plan) || !study.plan.length) throw new Error("Plan vide");
   } catch (e) {
-    console.error("Parse plan échoué :", e, "raw:", data?.synthese?.substring(0, 300));
+    console.error("Parse plan échoué :", e, "raw:", rawResponse.substring(0, 300));
     // Fallback plan par défaut
     study.plan = [
       {title: "Introduction", description: "Contexte et enjeu du sujet"},
@@ -949,9 +951,9 @@ async function createShareLink() {
 
 // ==================================================================
 // GÉNÉRATION AUTO : cascade draft (Groq) + refine (Claude) → chapitres
-// VERSION_MARKER: v3-fix-objectvalues-2026-08-02
+// VERSION_MARKER: v4-fix-rawresponse-2026-08-02
 // ==================================================================
-console.log("[Atelier] Version chargée : v3-fix-objectvalues-2026-08-02");
+console.log("[Atelier] Version chargée : v4-fix-rawresponse-2026-08-02");
 async function generateFullStudy() {
   const btn = document.getElementById("btn-auto-generate");
   const status = document.getElementById("auto-status");
