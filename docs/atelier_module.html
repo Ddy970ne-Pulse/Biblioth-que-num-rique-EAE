@@ -193,8 +193,12 @@
 
   <!-- Étape 4 — Rédaction -->
   <section class="card hidden" data-view="4">
-    <h2>Rédaction chapitre par chapitre</h2>
-    <p class="desc">Génère chaque chapitre avec Claude ou rédige-le toi-même. Tu peux tout modifier après.</p>
+    <h2>Rédaction de l'étude</h2>
+    <p class="desc">
+      <strong>Workflow recommandé :</strong>
+      <span style="color:#4a6741;">①</span> Commence par <strong>« 🚀 Générer l'étude complète »</strong> en bas de page pour construire tous les chapitres en cascade.
+      <span style="color:#4a6741;">②</span> Puis ajuste chapitre par chapitre : modifie le texte à la main, régénère un chapitre avec l'IA, ajoute ou supprime des chapitres.
+    </p>
     <div id="redac-chapter-nav" class="chapter-nav"></div>
     <div id="redac-container"></div>
 
@@ -446,13 +450,26 @@ Formate ta réponse en JSON strict, rien d'autre :
       })
     });
     const data = await resp.json();
-    // Parser le JSON du plan
+    // Parser le JSON du plan (Claude peut renvoyer du texte autour)
     let planText = (data.synthese || "").trim();
-    const m = planText.match(/\[[\s\S]*\]/);
-    if (m) planText = m[0];
+    // Priorité 1 : bloc ```json ... ```
+    let m = planText.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/);
+    if (m) planText = m[1];
+    else {
+      // Priorité 2 : premier [{...}] (array d'objets, pas juste [...])
+      m = planText.match(/\[\s*\{[\s\S]*?\}\s*\]/);
+      if (m) planText = m[0];
+      else {
+        // Priorité 3 : entre premier '[' et dernier ']'
+        const start = planText.indexOf("[");
+        const end = planText.lastIndexOf("]");
+        if (start !== -1 && end > start) planText = planText.substring(start, end + 1);
+      }
+    }
     study.plan = JSON.parse(planText);
+    if (!Array.isArray(study.plan) || !study.plan.length) throw new Error("Plan vide");
   } catch (e) {
-    console.error(e);
+    console.error("Parse plan échoué :", e, "raw:", data?.synthese?.substring(0, 300));
     // Fallback plan par défaut
     study.plan = [
       {title: "Introduction", description: "Contexte et enjeu du sujet"},
@@ -749,16 +766,49 @@ function renderRedacEditor() {
   const i = study.currentChapter;
   const chap = study.plan[i];
   const c = study.chapters[i] || {text: "", generated: false};
+  const hasContent = c.text && c.text.length > 100;
+  const genLabel = hasContent ? "↻ Régénérer ce chapitre" : "✍ Rédiger ce chapitre";
   $("#redac-container").innerHTML = `
     <h3 style="margin:0 0 4px;">Chapitre ${i+1} — ${chap.title}</h3>
-    <div class="hint" style="margin-bottom:12px;">${(study.sources[i]||[]).length} source(s) sélectionnée(s)</div>
-    <div style="display:flex;gap:8px;margin-bottom:12px;">
-      <button class="btn primary" onclick="generateChapter()">🧠 Rédiger avec Claude</button>
-      <button class="btn subtle" onclick="clearChapter()">Effacer</button>
+    <div class="hint" style="margin-bottom:12px;">
+      ${(study.sources[i]||[]).length} source(s) sélectionnée(s) ·
+      ${hasContent ? '<span style="color:#4a6741;">✓ rédigé</span>' : '<span style="color:#c98545;">à rédiger</span>'}
     </div>
-    <textarea id="chap-text" placeholder="Rédige ici ou clique sur 'Rédiger avec Claude'…" oninput="study.chapters[${i}].text=this.value;renderRedacChapterNav();">${c.text || ''}</textarea>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <button class="btn primary" onclick="generateChapter()" title="Rédige ou régénère UNIQUEMENT ce chapitre (utile après ajout d'un chapitre ou modification des sources)">${genLabel}</button>
+      <button class="btn subtle" onclick="clearChapter()">Effacer</button>
+      <button class="btn subtle" onclick="insertChapterAfter(${i})" title="Ajoute un chapitre juste après celui-ci">+ Nouveau chapitre après</button>
+      <button class="btn subtle" onclick="if(confirm('Supprimer ce chapitre ?')) { removeChapter(${i}); goToStep(4); }" title="Supprime ce chapitre">🗑 Supprimer ce chapitre</button>
+    </div>
+    <textarea id="chap-text" placeholder="Le contenu du chapitre apparaîtra ici après génération. Tu peux aussi rédiger toi-même." oninput="study.chapters[${i}].text=this.value;renderRedacChapterNav();">${c.text || ''}</textarea>
   `;
   if (!study.chapters[i]) study.chapters[i] = {text: "", generated: false};
+}
+
+function insertChapterAfter(i) {
+  const title = prompt("Titre du nouveau chapitre :", "Nouveau chapitre");
+  if (!title) return;
+  // Insérer dans study.plan à la position i+1
+  study.plan.splice(i + 1, 0, {title: title.trim(), description: ""});
+  // Décaler sources et chapters
+  const newSources = {}, newChapters = {};
+  Object.keys(study.sources || {}).forEach(k => {
+    const idx = parseInt(k);
+    if (idx <= i) newSources[idx] = study.sources[k];
+    else newSources[idx + 1] = study.sources[k];
+  });
+  Object.keys(study.chapters || {}).forEach(k => {
+    const idx = parseInt(k);
+    if (idx <= i) newChapters[idx] = study.chapters[k];
+    else newChapters[idx + 1] = study.chapters[k];
+  });
+  study.sources = newSources;
+  study.chapters = newChapters;
+  // Aller sur le nouveau chapitre
+  study.currentChapter = i + 1;
+  renderRedacChapterNav();
+  renderRedacEditor();
+  toast(`Chapitre "${title}" ajouté. Sélectionne ses sources à l'étape 3 puis reviens ici pour le rédiger.`);
 }
 async function generateChapter() {
   const i = study.currentChapter;
@@ -899,7 +949,9 @@ async function createShareLink() {
 
 // ==================================================================
 // GÉNÉRATION AUTO : cascade draft (Groq) + refine (Claude) → chapitres
+// VERSION_MARKER: v3-fix-objectvalues-2026-08-02
 // ==================================================================
+console.log("[Atelier] Version chargée : v3-fix-objectvalues-2026-08-02");
 async function generateFullStudy() {
   const btn = document.getElementById("btn-auto-generate");
   const status = document.getElementById("auto-status");
@@ -907,11 +959,14 @@ async function generateFullStudy() {
   const refineModel = document.getElementById("refine-model").value;
 
   // Collecter les sources : union des docs sélectionnés à l'étape 3
+  // study.sources est un objet {chapterIdx: [docIds]}, pas un array
   const allSourceIds = new Set();
-  for (const ids of (study.sources || [])) {
+  const sourcesObj = study.sources || {};
+  Object.values(sourcesObj).forEach(ids => {
     (ids || []).forEach(id => allSourceIds.add(id));
-  }
+  });
   const sources = CORPUS.filter(d => allSourceIds.has(d.i)).slice(0, 30);
+  console.log(`[generateFullStudy] sources sélectionnées : ${sources.length}/${CORPUS.length}`);
 
   if (!sources.length) {
     alert("Aucune source sélectionnée. Retourne à l'étape 3 et choisis au moins un document.");
