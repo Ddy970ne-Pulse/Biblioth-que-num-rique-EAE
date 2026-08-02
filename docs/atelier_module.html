@@ -149,11 +149,35 @@
 
   <!-- Étape 2 — Plan -->
   <section class="card hidden" data-view="2">
-    <h2>Plan proposé</h2>
-    <p class="desc">Claude propose un plan structuré basé sur ton sujet. Modifie les titres, réorganise ou supprime des chapitres à ta guise.</p>
+    <h2>Plan de l'étude</h2>
+    <p class="desc">Deux façons de construire le plan. Choisis celle qui te convient, tu pourras modifier après.</p>
+
+    <!-- Choix du mode de génération -->
+    <div id="plan-mode-selector" style="margin-bottom:16px;padding:14px;background:rgba(124,61,19,0.05);border-radius:6px;">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;">
+          <input type="radio" name="plan-mode" value="auto" checked onchange="togglePlanMode()">
+          <strong>🤖 Automatique</strong> — l'IA analyse le corpus et propose un plan
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;">
+          <input type="radio" name="plan-mode" value="guided" onchange="togglePlanMode()">
+          <strong>✍ Guidé</strong> — je précise l'angle et l'IA structure autour
+        </label>
+      </div>
+      <div id="plan-guidance-box" class="hidden">
+        <label style="display:block;font-size:12px;color:#555;margin-bottom:4px;">
+          Décris l'angle, l'axe ou les questions que tu veux voir traitées dans l'étude :
+        </label>
+        <textarea id="plan-guidance" rows="4" placeholder="Ex : « Je veux comparer la position du mouvement en 2014 vs aujourd'hui sur ce sujet, en insistant sur l'articulation avec la nouvelle alliance et le concept de pas d'évangélisation publique. »" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:4px;font-size:14px;font-family:inherit;"></textarea>
+      </div>
+      <div style="margin-top:10px;">
+        <button class="btn primary" onclick="generatePlan()">🔄 (Re)générer le plan</button>
+      </div>
+    </div>
+
     <div id="plan-loader" class="loader hidden">
       <div class="spinner"></div>
-      <div>Claude construit un plan à partir du corpus…</div>
+      <div>L'IA construit un plan à partir du corpus…</div>
     </div>
     <div id="plan-chapters"></div>
     <button class="btn subtle" id="add-chapter-btn" onclick="addChapter()">+ Ajouter un chapitre</button>
@@ -415,6 +439,12 @@ const PATTERN_INSTRUCTIONS = {
 5. Actualité de la méthode : comment elle continue de structurer les études 2025-2026 (Livrable 3 glossaire, ICM 2025)`,
 };
 
+function togglePlanMode() {
+  const mode = document.querySelector('input[name="plan-mode"]:checked')?.value || "auto";
+  const box = document.getElementById("plan-guidance-box");
+  if (box) box.classList.toggle("hidden", mode !== "guided");
+}
+
 async function generatePlan() {
   $("#plan-loader").classList.remove("hidden");
   $("#plan-chapters").innerHTML = "";
@@ -423,6 +453,12 @@ async function generatePlan() {
   const instructions = PATTERN_INSTRUCTIONS[pattern];
   study.pattern = pattern;
   study.patternName = patternName;
+
+  // Mode plan (auto / guided)
+  const planMode = document.querySelector('input[name="plan-mode"]:checked')?.value || "auto";
+  const userGuidance = planMode === "guided"
+    ? (document.getElementById("plan-guidance")?.value || "").trim()
+    : "";
 
   // Analyser le sujet contre le corpus via concept_memory
   const mem = await loadConceptMemory();
@@ -458,6 +494,12 @@ Versets bibliques dominants sur ces documents : ${versesList || "à identifier"}
 Auteurs qui traitent le sujet : ${authorsList || "à identifier"}
 
 ${instructions}
+
+${userGuidance ? `📌 ORIENTATION DEMANDÉE PAR L'UTILISATEUR (à respecter en priorité) :
+« ${userGuidance} »
+
+Le plan doit refléter cette orientation. Utilise les concepts et sources ci-dessus comme MATIÈRE PREMIÈRE, mais laisse-toi diriger par l'angle demandé.
+` : ""}
 
 Ta mission : construire un plan structuré en 5 à 8 chapitres SPÉCIFIQUEMENT ancré dans les concepts et sources ci-dessus.
 
@@ -986,9 +1028,9 @@ async function createShareLink() {
 
 // ==================================================================
 // GÉNÉRATION AUTO : cascade draft (Groq) + refine (Claude) → chapitres
-// VERSION_MARKER: v6-plan-analytique-concepts-2026-08-02
+// VERSION_MARKER: v7-plan-guided-2026-08-02
 // ==================================================================
-console.log("[Atelier] Version chargée : v6-plan-analytique-concepts-2026-08-02");
+console.log("[Atelier] Version chargée : v7-plan-guided-2026-08-02");
 async function generateFullStudy() {
   const btn = document.getElementById("btn-auto-generate");
   const status = document.getElementById("auto-status");
