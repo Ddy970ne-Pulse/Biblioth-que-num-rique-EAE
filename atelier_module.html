@@ -168,6 +168,18 @@
     <h2>Sélection des sources</h2>
     <p class="desc">Pour chaque chapitre, coche les documents du corpus à inclure dans la rédaction.</p>
     <div id="sources-chapter-nav" class="chapter-nav"></div>
+
+    <!-- Actions de sélection en masse -->
+    <div id="sources-bulk-actions" style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;padding:10px;background:rgba(124,61,19,0.05);border-radius:6px;align-items:center;">
+      <span style="font-size:12px;color:#555;font-weight:600;">Sélection :</span>
+      <button class="btn subtle" style="font-size:12px;padding:4px 10px;" onclick="selectAllSourcesCurrentChapter()">☑ Tout (ce chapitre)</button>
+      <button class="btn subtle" style="font-size:12px;padding:4px 10px;" onclick="deselectAllSourcesCurrentChapter()">☐ Aucun (ce chapitre)</button>
+      <span style="width:1px;height:20px;background:#ccc;"></span>
+      <button class="btn subtle" style="font-size:12px;padding:4px 10px;" onclick="selectAllSourcesAllChapters()" title="Applique la sélection actuelle à TOUS les chapitres">☑☑ Tout pour tous les chapitres</button>
+      <button class="btn subtle" style="font-size:12px;padding:4px 10px;" onclick="deselectAllSourcesAllChapters()">☐☐ Aucun pour tous les chapitres</button>
+      <span id="sources-bulk-status" style="font-size:12px;color:#4a6741;margin-left:auto;"></span>
+    </div>
+
     <div id="sources-loader" class="loader hidden">
       <div class="spinner"></div>
       <div>Recherche des sources pertinentes…</div>
@@ -537,6 +549,88 @@ function toggleSource(docId, checked) {
   if (checked && !study.sources[i].includes(docId)) study.sources[i].push(docId);
   if (!checked) study.sources[i] = study.sources[i].filter(x => x !== docId);
   renderSourcesChapterNav();
+}
+
+// ==== Sélection en masse ====
+function _visibleSourceIds() {
+  // Retourne les doc_ids affichés dans la liste (les sources suggérées pour le chapitre courant)
+  const list = document.getElementById("sources-list");
+  if (!list) return [];
+  const ids = [];
+  list.querySelectorAll("input[type=checkbox]").forEach(cb => {
+    // Le onchange contient toggleSource('ID', ...) → extraire l'ID
+    const m = cb.getAttribute("onchange")?.match(/toggleSource\('([^']+)'/);
+    if (m) ids.push(m[1]);
+  });
+  return ids;
+}
+
+function _setBulkStatus(msg) {
+  const el = document.getElementById("sources-bulk-status");
+  if (el) {
+    el.textContent = msg;
+    setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 4000);
+  }
+}
+
+function selectAllSourcesCurrentChapter() {
+  const i = study.currentChapter;
+  const ids = _visibleSourceIds();
+  if (!ids.length) { _setBulkStatus("Aucune source affichée"); return; }
+  study.sources[i] = [...new Set([...(study.sources[i] || []), ...ids])];
+  loadSourcesForCurrent();  // refresh UI
+  renderSourcesChapterNav();
+  _setBulkStatus(`✓ ${ids.length} sources sélectionnées pour le chapitre ${i+1}`);
+}
+
+function deselectAllSourcesCurrentChapter() {
+  const i = study.currentChapter;
+  const before = (study.sources[i] || []).length;
+  study.sources[i] = [];
+  loadSourcesForCurrent();
+  renderSourcesChapterNav();
+  _setBulkStatus(`✓ ${before} sources retirées du chapitre ${i+1}`);
+}
+
+async function selectAllSourcesAllChapters() {
+  if (!confirm(`Sélectionner les sources suggérées pour chaque chapitre (${study.plan.length} chapitres) ?\n\nCela va charger et sélectionner les sources pour tous les chapitres.`)) return;
+  _setBulkStatus("⏳ Traitement en cours...");
+  const originalChapter = study.currentChapter;
+  let total = 0;
+  for (let i = 0; i < study.plan.length; i++) {
+    study.currentChapter = i;
+    // Charger les sources pour ce chapitre (silencieusement)
+    await new Promise(resolve => {
+      loadSourcesForCurrent();
+      // Attendre que le loader disparaisse
+      const check = setInterval(() => {
+        const loader = document.getElementById("sources-loader");
+        if (loader && loader.classList.contains("hidden")) {
+          clearInterval(check);
+          const ids = _visibleSourceIds();
+          study.sources[i] = [...new Set([...(study.sources[i] || []), ...ids])];
+          total += ids.length;
+          resolve();
+        }
+      }, 50);
+    });
+  }
+  study.currentChapter = originalChapter;
+  loadSourcesForCurrent();
+  renderSourcesChapterNav();
+  _setBulkStatus(`✓ ${total} sources sélectionnées au total sur ${study.plan.length} chapitres`);
+}
+
+function deselectAllSourcesAllChapters() {
+  if (!confirm(`Retirer toutes les sources sélectionnées (${study.plan.length} chapitres) ?`)) return;
+  let total = 0;
+  for (let i = 0; i < study.plan.length; i++) {
+    total += (study.sources[i] || []).length;
+    study.sources[i] = [];
+  }
+  loadSourcesForCurrent();
+  renderSourcesChapterNav();
+  _setBulkStatus(`✓ ${total} sources retirées de tous les chapitres`);
 }
 
 // ==== ÉTAPE 4 — RÉDACTION ====
