@@ -663,17 +663,35 @@ async function createShareLink() {
 }
 
 // ==== INIT ====
+const FIREBASE_INDEX_URL = "https://firebasestorage.googleapis.com/v0/b/bibliotheque-rag.firebasestorage.app/o/indexes%2Ffulltext_index_full.json?alt=media";
+
 async function initCorpus() {
-  // Essayer de charger le corpus depuis le dashboard parent s'il est chargé
-  if (window.FULLTEXT) { CORPUS = window.FULLTEXT; return; }
-  // Sinon fetch un corpus stub (sera remplacé par intégration au dashboard)
+  // 1. Si intégré en iframe et le parent a chargé le corpus → réutiliser (économie 43 MB)
   try {
-    const r = await fetch("./fulltext_index_full.json");
-    if (r.ok) CORPUS = await r.json();
-  } catch(e) {
-    console.warn("Corpus non chargé, mode démo");
+    if (window.parent && window.parent !== window && Array.isArray(window.parent.FULLTEXT) && window.parent.FULLTEXT.length) {
+      CORPUS = window.parent.FULLTEXT;
+      console.log(`Atelier · corpus partagé depuis parent : ${CORPUS.length} docs`);
+      return;
+    }
+  } catch (e) {
+    console.warn("Accès parent bloqué (cross-origin) :", e);
   }
-  console.log(`Atelier prêt · corpus : ${CORPUS.length} docs`);
+  // 2. Si le corpus est sur window (variable globale locale)
+  if (Array.isArray(window.FULLTEXT) && window.FULLTEXT.length) {
+    CORPUS = window.FULLTEXT;
+    console.log(`Atelier · corpus depuis window : ${CORPUS.length} docs`);
+    return;
+  }
+  // 3. Fallback : fetch depuis Firebase Storage
+  try {
+    const t0 = performance.now();
+    const r = await fetch(FIREBASE_INDEX_URL);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    CORPUS = await r.json();
+    console.log(`Atelier · corpus depuis Firebase : ${CORPUS.length} docs en ${((performance.now()-t0)/1000).toFixed(1)}s`);
+  } catch(e) {
+    console.warn("Corpus non chargé, mode démo :", e);
+  }
 }
 initCorpus();
 
