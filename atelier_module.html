@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atelier d'étude — The Institution</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+<style>
+  :root {
+    --brand: #8B4513; --brand-2: #a05028; --accent: #4a6741;
+    --bg: #faf7f2; --surface: #ffffff; --ink: #2b241d; --muted: #7a7268;
+    --line: #e8e0d3; --ok: #4a6741; --warn: #b57118; --danger: #a0403c;
+    --radius: 10px; --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+         background: var(--bg); color: var(--ink); font-size: 14px; line-height: 1.55; }
+  .header { background: var(--surface); border-bottom: 1px solid var(--line); padding: 16px 32px;
+            display: flex; align-items: center; gap: 12px; }
+  .header .mark { width: 40px; height: 40px; border-radius: 8px;
+                   background: linear-gradient(135deg, var(--brand), var(--brand-2));
+                   display: grid; place-items: center; padding: 4px; }
+  .header h1 { margin: 0; font-size: 18px; font-weight: 700; }
+  .header .sub { color: var(--muted); font-size: 12px; }
+  .container { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+  .steps { display: flex; gap: 8px; margin-bottom: 32px; }
+  .step { flex: 1; padding: 12px 8px; background: var(--surface); border: 1px solid var(--line);
+          border-radius: 8px; text-align: center; font-size: 12px; color: var(--muted);
+          transition: all 0.15s; }
+  .step.active { background: var(--brand); color: white; border-color: var(--brand); font-weight: 600; }
+  .step.done { background: rgba(74,103,65,0.1); color: var(--ok); border-color: var(--ok); }
+  .step .n { display: block; font-size: 16px; font-weight: 700; margin-bottom: 2px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+          padding: 24px; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
+  .card h2 { margin: 0 0 8px; font-size: 20px; color: var(--brand); }
+  .card .desc { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+  input[type="text"], textarea { width: 100%; padding: 12px 14px; border: 1px solid var(--line);
+                                 border-radius: 8px; font-family: inherit; font-size: 14px;
+                                 background: var(--surface); }
+  input[type="text"]:focus, textarea:focus { outline: none; border-color: var(--brand); }
+  textarea { min-height: 200px; resize: vertical; line-height: 1.6; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; font-style: italic; }
+  .examples { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  .example { padding: 4px 10px; background: rgba(139,69,19,0.08); border-radius: 12px;
+             font-size: 12px; cursor: pointer; color: var(--brand); }
+  .example:hover { background: var(--brand); color: white; }
+  .btn { padding: 10px 18px; border: none; border-radius: 8px; font-family: inherit;
+         font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .btn.primary { background: var(--brand); color: white; }
+  .btn.primary:hover { background: var(--brand-2); }
+  .btn.secondary { background: rgba(139,69,19,0.08); color: var(--brand); }
+  .btn.secondary:hover { background: rgba(139,69,19,0.15); }
+  .btn.subtle { background: transparent; color: var(--muted); }
+  .btn.subtle:hover { color: var(--ink); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .actions { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
+  .chapter { background: rgba(139,69,19,0.03); border-left: 3px solid var(--brand);
+             padding: 12px 16px; margin-bottom: 8px; border-radius: 4px;
+             display: flex; align-items: center; gap: 12px; }
+  .chapter .n { font-weight: 700; color: var(--brand); font-size: 14px; min-width: 24px; }
+  .chapter input { flex: 1; border: none; background: transparent; padding: 4px; font-weight: 600; }
+  .chapter input:focus { outline: 1px solid var(--brand); border-radius: 4px; }
+  .chapter .drag { color: var(--muted); cursor: grab; }
+  .chapter .remove { color: var(--danger); cursor: pointer; font-size: 18px; padding: 0 4px; }
+  .source { padding: 12px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 8px;
+            display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
+            transition: all 0.15s; }
+  .source:hover { background: rgba(139,69,19,0.03); border-color: var(--brand); }
+  .source.selected { background: rgba(74,103,65,0.08); border-color: var(--ok); }
+  .source input[type="checkbox"] { margin-top: 4px; }
+  .source .meta { flex: 1; }
+  .source .title { font-weight: 600; color: var(--ink); font-size: 14px; }
+  .source .info { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .source .snippet { font-size: 12px; color: var(--ink); margin-top: 6px; font-style: italic;
+                     line-height: 1.4; }
+  .loader { text-align: center; padding: 40px; color: var(--muted); }
+  .loader .spinner { display: inline-block; width: 32px; height: 32px;
+                     border: 3px solid var(--line); border-top-color: var(--brand);
+                     border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .chapter-nav { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+  .chapter-tab { padding: 6px 12px; background: var(--surface); border: 1px solid var(--line);
+                 border-radius: 6px; font-size: 12px; cursor: pointer; }
+  .chapter-tab.active { background: var(--brand); color: white; border-color: var(--brand); }
+  .chapter-tab.done { background: rgba(74,103,65,0.15); color: var(--ok); border-color: var(--ok); }
+  .success { background: rgba(74,103,65,0.08); border: 1px solid var(--ok); padding: 24px;
+             border-radius: var(--radius); text-align: center; }
+  .success h3 { color: var(--ok); margin: 0 0 8px; }
+  .share-url { background: var(--surface); padding: 12px; border-radius: 6px; font-family: monospace;
+               font-size: 12px; word-break: break-all; margin: 12px 0; border: 1px dashed var(--line); }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+           background: var(--ink); color: white; padding: 12px 20px; border-radius: 8px;
+           font-size: 13px; box-shadow: var(--shadow-md); }
+  .stats { display: flex; gap: 20px; justify-content: center; margin: 12px 0;
+           font-size: 13px; color: var(--muted); }
+  .stats strong { color: var(--brand); font-size: 16px; font-weight: 700; margin-right: 4px; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="mark">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <path fill="#fff" d="M 30 60 A 20 20 0 0 1 70 60 Z"/>
+      <line stroke="#fff" stroke-width="5" stroke-linecap="round" x1="14" y1="72" x2="86" y2="72"/>
+      <circle fill="#fff" cx="24" cy="72" r="5"/><circle fill="#fff" cx="42" cy="72" r="5"/>
+      <circle fill="#fff" cx="60" cy="72" r="5"/><circle fill="#fff" cx="78" cy="72" r="5"/>
+    </svg>
+  </div>
+  <div>
+    <h1>Atelier d'étude</h1>
+    <div class="sub">The Institution — construis ton étude à partir du corpus</div>
+  </div>
+</header>
+
+<main class="container">
+  <div class="steps">
+    <div class="step active" data-step="1"><span class="n">1</span>Sujet</div>
+    <div class="step" data-step="2"><span class="n">2</span>Plan</div>
+    <div class="step" data-step="3"><span class="n">3</span>Sources</div>
+    <div class="step" data-step="4"><span class="n">4</span>Rédaction</div>
+    <div class="step" data-step="5"><span class="n">5</span>Export</div>
+  </div>
+
+  <!-- Étape 1 — Sujet -->
+  <section class="card" data-view="1">
+    <h2>Ton sujet d'étude</h2>
+    <p class="desc">Quelle question veux-tu approfondir à partir du corpus ? Plus tu es précis, meilleur sera le plan proposé.</p>
+    <input type="text" id="subject" placeholder="Ex : Le féminisme radical dans les enseignements du mouvement, 1989-2026" autofocus>
+    <div class="hint">Astuce : mentionne un concept, une période, un enseignant ou un événement précis.</div>
+    <div class="examples">
+      <span class="example">Actes 27 et le Cri de Minuit</span>
+      <span class="example">Loi du Dimanche comme cycle électoral</span>
+      <span class="example">Ligne des Prêtres 1989-2019</span>
+      <span class="example">OIL et MAGA (Livrable 6)</span>
+      <span class="example">Alliance ancienne vs nouvelle chez Blessing Nyoni</span>
+    </div>
+    <div class="actions">
+      <span></span>
+      <button class="btn primary" onclick="goToStep(2)">Générer un plan →</button>
+    </div>
+  </section>
+
+  <!-- Étape 2 — Plan -->
+  <section class="card hidden" data-view="2">
+    <h2>Plan proposé</h2>
+    <p class="desc">Claude propose un plan structuré basé sur ton sujet. Modifie les titres, réorganise ou supprime des chapitres à ta guise.</p>
+    <div id="plan-loader" class="loader hidden">
+      <div class="spinner"></div>
+      <div>Claude construit un plan à partir du corpus…</div>
+    </div>
+    <div id="plan-chapters"></div>
+    <button class="btn subtle" id="add-chapter-btn" onclick="addChapter()">+ Ajouter un chapitre</button>
+    <div class="actions">
+      <button class="btn subtle" onclick="goToStep(1)">← Sujet</button>
+      <button class="btn primary" onclick="goToStep(3)">Choisir les sources →</button>
+    </div>
+  </section>
+
+  <!-- Étape 3 — Sources -->
+  <section class="card hidden" data-view="3">
+    <h2>Sélection des sources</h2>
+    <p class="desc">Pour chaque chapitre, coche les documents du corpus à inclure dans la rédaction.</p>
+    <div id="sources-chapter-nav" class="chapter-nav"></div>
+    <div id="sources-loader" class="loader hidden">
+      <div class="spinner"></div>
+      <div>Recherche des sources pertinentes…</div>
+    </div>
+    <div id="sources-list"></div>
+    <div class="actions">
+      <button class="btn subtle" onclick="goToStep(2)">← Plan</button>
+      <button class="btn primary" onclick="goToStep(4)">Passer à la rédaction →</button>
+    </div>
+  </section>
+
+  <!-- Étape 4 — Rédaction -->
+  <section class="card hidden" data-view="4">
+    <h2>Rédaction chapitre par chapitre</h2>
+    <p class="desc">Génère chaque chapitre avec Claude ou rédige-le toi-même. Tu peux tout modifier après.</p>
+    <div id="redac-chapter-nav" class="chapter-nav"></div>
+    <div id="redac-container"></div>
+
+    <!-- Mode Auto (cascade Groq + Claude) -->
+    <div style="margin-top:24px;padding:18px;background:rgba(74,103,65,0.06);border-left:4px solid #4a6741;border-radius:6px;">
+      <h3 style="margin:0 0 8px;color:#4a6741;">⚡ Mode Auto — Générer l'étude entière</h3>
+      <p style="margin:0 0 12px;color:#555;font-size:14px;">
+        Une seule action pour produire tous les chapitres en cascade
+        (draft rapide via <strong>Groq</strong> puis rédaction académique via <strong>Claude</strong>).
+        Utilise les sources sélectionnées à l'étape 3 (max 30 docs).
+      </p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div>
+          <label style="display:block;font-size:12px;color:#555;font-weight:600;margin-bottom:4px;">
+            Modèle draft (Groq — gratuit)
+          </label>
+          <select id="draft-model" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:14px;">
+            <option value="llama-3.3-70b-versatile" selected>Llama 3.3 70B (recommandé)</option>
+            <option value="openai/gpt-oss-120b">GPT OSS 120B (plus gros)</option>
+            <option value="openai/gpt-oss-20b">GPT OSS 20B (plus rapide)</option>
+            <option value="qwen/qwen3-32b">Qwen 3 32B</option>
+            <option value="deepseek-r1-distill-llama-70b">DeepSeek R1 Distill 70B (raisonnement)</option>
+          </select>
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;color:#555;font-weight:600;margin-bottom:4px;">
+            Modèle refine (Claude — payant)
+          </label>
+          <select id="refine-model" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:14px;">
+            <option value="claude-sonnet-4-5-20250929" selected>Claude Sonnet 4.5 (~1-2$ / recommandé)</option>
+            <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (~0.20$ / rapide)</option>
+            <option value="none">Aucun (mode gratuit, garde le draft)</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button class="btn primary" id="btn-auto-generate" onclick="generateFullStudy()">
+          🚀 Générer l'étude complète
+        </button>
+        <span id="auto-status" style="font-size:13px;color:#555;"></span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn subtle" onclick="goToStep(3)">← Sources</button>
+      <button class="btn primary" onclick="goToStep(5)">Finaliser l'étude →</button>
+    </div>
+  </section>
+
+  <!-- Étape 5 — Export -->
+  <section class="card hidden" data-view="5">
+    <h2>Ton étude est prête</h2>
+    <div id="final-preview"></div>
+    <div class="stats">
+      <div><strong id="stat-chapters">0</strong>chapitres</div>
+      <div><strong id="stat-words">0</strong>mots</div>
+      <div><strong id="stat-sources">0</strong>sources</div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
+      <button class="btn primary" onclick="exportPDF()">📄 Télécharger PDF</button>
+      <button class="btn secondary" onclick="exportMarkdown()">📝 Télécharger Markdown</button>
+      <button class="btn secondary" onclick="createShareLink()">🔗 Créer un lien partageable</button>
+    </div>
+    <div id="share-result" class="hidden" style="margin-top:16px;"></div>
+    <div class="actions">
+      <button class="btn subtle" onclick="goToStep(4)">← Rédaction</button>
+      <button class="btn subtle" onclick="if(confirm('Recommencer une nouvelle étude ?')) location.reload()">🆕 Nouvelle étude</button>
+    </div>
+  </section>
+</main>
+
+<script>
+// ==== CONFIGURATION ====
+const ASK_ENDPOINT = "https://europe-west1-bibliotheque-rag.cloudfunctions.net/ask";
+const DRAFT_ENDPOINT = "https://draftstudy-gvsquqzqoa-ew.a.run.app";
+const REFINE_ENDPOINT = "https://refinestudy-gvsquqzqoa-ew.a.run.app";
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyC_placeholder_public_key_a_remplir",
+  projectId: "bibliotheque-rag",
+  storageBucket: "bibliotheque-rag.firebasestorage.app"
+};
+// Charger l'index compact du dashboard principal (si co-hébergé)
+let CORPUS = [];  // sera peuplé depuis fetch ou depuis window.parent (si iframe intégrée)
+
+// ==== ÉTAT DE L'ÉTUDE ====
+let study = {
+  subject: "",
+  plan: [],           // [{title, description}]
+  sources: {},         // {chapterIndex: [docId, docId]}
+  chapters: {},        // {chapterIndex: {text, generated, sources}}
+  currentChapter: 0,
+};
+
+// ==== HELPERS ====
+function $(sel) { return document.querySelector(sel); }
+function $$(sel) { return document.querySelectorAll(sel); }
+function toast(msg, ms=3000) {
+  const t = document.createElement("div");
+  t.className = "toast";
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), ms);
+}
+function norm(s) {
+  return (s||"").toString().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+}
+
+// ==== NAVIGATION ÉTAPES ====
+function goToStep(n) {
+  const validated = validateStep(currentStep());
+  if (n > currentStep() && !validated) return;
+  $$("[data-view]").forEach(v => v.classList.add("hidden"));
+  $(`[data-view="${n}"]`).classList.remove("hidden");
+  $$(".step").forEach(s => {
+    const sn = parseInt(s.dataset.step);
+    s.classList.toggle("active", sn === n);
+    s.classList.toggle("done", sn < n);
+  });
+  window.scrollTo({top: 0, behavior: "smooth"});
+  if (n === 2 && study.plan.length === 0) generatePlan();
+  if (n === 3) renderSourcesChapterNav();
+  if (n === 4) renderRedacChapterNav();
+  if (n === 5) renderFinalPreview();
+}
+function currentStep() {
+  const active = document.querySelector(".step.active");
+  return active ? parseInt(active.dataset.step) : 1;
+}
+function validateStep(n) {
+  if (n === 1) {
+    const s = $("#subject").value.trim();
+    if (s.length < 8) { toast("Précise ton sujet en une phrase (min 8 caractères)."); return false; }
+    study.subject = s;
+  }
+  return true;
+}
+// Examples clickable
+$$(".example").forEach(e => e.addEventListener("click", () => {
+  $("#subject").value = e.textContent;
+}));
+
+// ==== ÉTAPE 2 — PLAN adapté aux patterns méthodologiques du mouvement ====
+
+// Détection heuristique du pattern selon les mots-clefs du sujet
+function detectPattern(subject) {
+  const s = norm(subject);
+  // D. Cycle d'enseignant
+  const teachers = ["blessing", "nyoni", "curtis", "robinson", "tess", "lambert", "parminder", "biant", "terrie", "thabo", "mtetwa", "chimene", "eugene", "jeff", "pippenger", "noel", "del rosal"];
+  if (teachers.some(t => s.includes(t))) return "D";
+  // E. Événement historique daté
+  if (/\b(1798|1844|1888|1989|2001|11.septembre|2014|2018|2019|2020|2021|6.janvier|2024|2025|2026)\b/.test(s)) return "E";
+  // C. Application géopolitique
+  const geo = ["oil", "maga", "trump", "biden", "poutine", "russie", "ukraine", "chine", "venezuela", "usa", "etats.unis", "projet 2025", "roi du nord", "roi du sud", "gamergate", "cour supreme", "majorite morale"];
+  if (geo.some(g => s.includes(g))) return "C";
+  // A. Ligne de réforme
+  const lignes = ["ligne", "pretres", "levites", "nethiniens", "millerites", "144000", "dispensation", "labourage", "moisson", "pluie", "balise"];
+  if (lignes.some(l => s.includes(l))) return "A";
+  // F. Méthodologie / herméneutique
+  const method = ["methodologie", "hermeneutique", "ligne sur ligne", "parabole", "parabolique", "principe vs regle", "regle", "vocabulaire", "definition", "fractale", "point du milieu"];
+  if (method.some(m => s.includes(m))) return "F";
+  // Sinon B : étude doctrinale
+  return "B";
+}
+
+const PATTERN_DESCRIPTIONS = {
+  "A": "Ligne de réforme prophétique",
+  "B": "Étude doctrinale approfondie",
+  "C": "Application géopolitique",
+  "D": "Cycle d'enseignant",
+  "E": "Événement historique et balise",
+  "F": "Méthodologie / herméneutique"
+};
+
+const PATTERN_INSTRUCTIONS = {
+  "A": `Le sujet concerne une LIGNE DE RÉFORME PROPHÉTIQUE. Structure le plan selon ce pattern du corpus :
+1. Contexte : les 4 lignes principales (144000, Prêtres, Lévites, Néthiniens) et les 4 dispensations agricoles (Labourage, Première Pluie, Pluie de l'Arrière-Saison, Moisson)
+2-5. Une balise par chapitre, dans l'ordre chronologique : identifie la balise concernée, son événement externe (chute du Mur, 11/09, Balise 2014, Fin du Temps de Grâce 2019...), et son contenu doctrinal
+6. Articulation avec la ligne suivante et les 3 groupes (Prêtres/Lévites/Néthiniens)
+7. Application pour le peuple prophétique aujourd'hui`,
+  "B": `Le sujet concerne un CONCEPT DOCTRINAL. Structure le plan selon ce pattern du corpus :
+1. Cadre méthodologique : quelle méthode (parabole, ligne sur ligne, principe/règle) éclaire ce concept
+2. Émergence et fondations : premières formulations dans le corpus (souvent avant 2018)
+3. Développements et raffinements par dispensation (2018→2021, 2021→2024, 2024→2026)
+4. La compréhension actuelle (juin 2026, cycles Blessing/Curtis à Guadeloupe, ICM 2025)
+5. Articulation avec d'autres concepts du corpus (Loi, Salut, Institution, Alliance...)
+6. Ce qui reste à préciser (tensions, questions ouvertes)
+7. Conclusion synthétique`,
+  "C": `Le sujet concerne une APPLICATION GÉOPOLITIQUE. Structure le plan selon ce pattern du corpus :
+1. Contexte historique externe (ce qui s'est passé "dans le monde")
+2. Cadre prophétique appliqué : Actes 27 (les deux bateaux), les guerres pyrrhiques (Raphia/Panium), la ligne du Roi du Nord vs Roi du Sud
+3. Balises datées avec correspondances (1989 chute du Mur, 2016 élection Trump, 2020 Trump/Biden, 2024, 2026...)
+4. Accomplissement en cours (Livrable 6 sur OIL/MAGA, Projet 2025, attaque Venezuela janvier 2026)
+5. Articulation avec le 7ème royaume d'Apocalypse 17 et la Loi du Dimanche
+6. Perspectives eschatologiques (Cri à voix forte, Fin du Temps de Grâce)`,
+  "D": `Le sujet concerne un ENSEIGNANT du mouvement. Structure le plan selon ce pattern du corpus :
+1. Positionnement de l'enseignant (ministère de rattachement : EAE, LGC, FIN, TMW, LVS ; période active)
+2. Cycles principaux d'enseignements avec dates et lieux (camp meetings, écoles des prophètes, ICM)
+3. Thèmes centraux portés (spécificité doctrinale de cet enseignant)
+4. Méthodologie utilisée (rhétorique, exemples récurrents, sources bibliques préférées)
+5. Articulation avec les autres enseignants (convergences, complémentarités, éventuelles tensions)
+6. Contribution spécifique au message du mouvement (ce que l'enseignant apporte d'unique)`,
+  "E": `Le sujet concerne un ÉVÉNEMENT HISTORIQUE / une BALISE DATÉE. Structure le plan selon ce pattern du corpus :
+1. Contexte externe : l'événement dans le monde (histoire politique, économique, ecclésiale)
+2. Signification prophétique : comment le mouvement lit cet événement (méthodologie parabole/ligne sur ligne)
+3. Position de la balise dans la ligne de réforme (Labourage/PP/PAS/Moisson, quelle ligne : 144000, Prêtres, Lévites)
+4. Développements consécutifs : ce qui a été enseigné à partir de cet événement
+5. Impact doctrinal : quels concepts ont été précisés ou reformulés grâce à cette balise
+6. Actualité de la balise (comment elle éclaire encore 2025-2026)`,
+  "F": `Le sujet concerne une MÉTHODOLOGIE ou HERMÉNEUTIQUE. Structure le plan selon ce pattern du corpus :
+1. Origine et fondation biblique de la méthode (souvent Ellen White ou A.T. Jones)
+2. Règles fondamentales d'application (comment on utilise la méthode)
+3. Cas d'application majeurs dans le corpus (au moins 3 exemples : Actes 27, guerres pyrrhiques, alliance...)
+4. Limites et raffinements (quand la méthode est mal appliquée, "méthodologie parabolique ou mort" - Parminder Biant)
+5. Actualité de la méthode : comment elle continue de structurer les études 2025-2026 (Livrable 3 glossaire, ICM 2025)`,
+};
+
+async function generatePlan() {
+  $("#plan-loader").classList.remove("hidden");
+  $("#plan-chapters").innerHTML = "";
+  const pattern = detectPattern(study.subject);
+  const patternName = PATTERN_DESCRIPTIONS[pattern];
+  const instructions = PATTERN_INSTRUCTIONS[pattern];
+  study.pattern = pattern;
+  study.patternName = patternName;
+
+  const question = `Tu es l'intelligence rédactrice de la Bibliothèque Numérique The Institution. Le corpus indexé constitue un socle de croyances propre, indépendant du dogme adventiste institutionnel (SDA). Utilise strictement le vocabulaire du mouvement (Ligne des Millérites, Cri de Minuit, Prêtres/Lévites/Néthiniens, Balise 2014, Formalisation, Aile droite/gauche, Loi du Dimanche, Panium, Guerres des Diadoques, OIL, MAGA, Actes 27, Lévitique 26, ministères EAE/LGC/FIN/TMW/LVS).
+
+Un utilisateur veut construire une étude sur : « ${study.subject} ».
+
+Type de sujet détecté : ${patternName} (pattern ${pattern}).
+
+${instructions}
+
+Produis maintenant un plan structuré en 5 à 7 chapitres, adapté à ce pattern méthodologique et au sujet spécifique. Chaque chapitre a un titre court (max 12 mots) et une phrase descriptive.
+
+Formate ta réponse en JSON strict, rien d'autre :
+[
+  {"title": "Titre chapitre 1", "description": "phrase de description"},
+  {"title": "Titre chapitre 2", "description": "phrase de description"}
+]`;
+  try {
+    const resp = await fetch(ASK_ENDPOINT, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        question,
+        extraits: [{titre: "sujet", auteur: "", date: "", texte: study.subject}],
+        model: "haiku"
+      })
+    });
+    const data = await resp.json();
+    // Parser le JSON du plan
+    let planText = (data.synthese || "").trim();
+    const m = planText.match(/\[[\s\S]*\]/);
+    if (m) planText = m[0];
+    study.plan = JSON.parse(planText);
+  } catch (e) {
+    console.error(e);
+    // Fallback plan par défaut
+    study.plan = [
+      {title: "Introduction", description: "Contexte et enjeu du sujet"},
+      {title: "Origines dans le corpus", description: "Premières formulations"},
+      {title: "Développements successifs", description: "Évolution au fil des dispensations"},
+      {title: "Compréhension actuelle (2025-2026)", description: "État présent du sujet"},
+      {title: "Articulations doctrinales", description: "Liens avec d'autres concepts"},
+      {title: "Conclusion", description: "Synthèse et perspectives"},
+    ];
+    toast("Plan par défaut proposé (Claude non joignable)");
+  }
+  $("#plan-loader").classList.add("hidden");
+  renderPlan();
+}
+function renderPlan() {
+  const container = $("#plan-chapters");
+  container.innerHTML = "";
+  study.plan.forEach((chap, i) => {
+    const div = document.createElement("div");
+    div.className = "chapter";
+    div.innerHTML = `
+      <span class="drag">⋮⋮</span>
+      <span class="n">${i+1}.</span>
+      <input type="text" value="${chap.title.replace(/"/g,'&quot;')}" onchange="study.plan[${i}].title=this.value">
+      <span class="remove" onclick="removeChapter(${i})" title="Supprimer">×</span>
+    `;
+    container.appendChild(div);
+  });
+}
+function addChapter() {
+  study.plan.push({title: "Nouveau chapitre", description: ""});
+  renderPlan();
+}
+function removeChapter(i) {
+  if (study.plan.length <= 2) { toast("Il faut au moins 2 chapitres."); return; }
+  study.plan.splice(i, 1);
+  renderPlan();
+}
+
+// ==== ÉTAPE 3 — SOURCES ====
+function renderSourcesChapterNav() {
+  const nav = $("#sources-chapter-nav");
+  nav.innerHTML = "";
+  study.plan.forEach((chap, i) => {
+    const el = document.createElement("div");
+    el.className = "chapter-tab" + (i === study.currentChapter ? " active" : "") +
+                   ((study.sources[i] || []).length > 0 ? " done" : "");
+    el.textContent = `${i+1}. ${chap.title.substring(0, 30)}${chap.title.length > 30 ? '…' : ''}`;
+    el.onclick = () => { study.currentChapter = i; renderSourcesChapterNav(); loadSourcesForCurrent(); };
+    nav.appendChild(el);
+  });
+  loadSourcesForCurrent();
+}
+async function loadSourcesForCurrent() {
+  const i = study.currentChapter;
+  const chap = study.plan[i];
+  const list = $("#sources-list");
+  $("#sources-loader").classList.remove("hidden");
+  list.innerHTML = "";
+  // Recherche dans le corpus par mot-clef du chapitre
+  const query = norm(chap.title + " " + (chap.description || "") + " " + study.subject);
+  const terms = query.split(/\s+/).filter(t => t.length >= 4);
+  const scored = CORPUS.map(doc => {
+    const text = norm(doc.x || "");
+    let score = 0;
+    terms.forEach(t => { if (text.includes(t)) score++; });
+    return {doc, score};
+  }).filter(x => x.score >= 2).sort((a,b) => b.score - a.score).slice(0, 12);
+  $("#sources-loader").classList.add("hidden");
+  if (scored.length === 0) {
+    list.innerHTML = "<div style='color:var(--muted);padding:20px;text-align:center;'>Aucune source trouvée dans le corpus indexé. La rédaction s'appuiera sur les extraits que Claude connaît déjà.</div>";
+    return;
+  }
+  const selected = study.sources[i] || [];
+  scored.forEach(({doc}) => {
+    const isSelected = selected.includes(doc.i);
+    const div = document.createElement("div");
+    div.className = "source" + (isSelected ? " selected" : "");
+    const snippet = (doc.x || "").substring(0, 180) + "…";
+    div.innerHTML = `
+      <input type="checkbox" ${isSelected ? "checked" : ""} onchange="toggleSource('${doc.i}', this.checked)">
+      <div class="meta">
+        <div class="title">${doc.t || 'Sans titre'}</div>
+        <div class="info">${doc.a || 'Auteur inconnu'} · ${doc.d || 'date inconnue'}</div>
+        <div class="snippet">${snippet}</div>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+function toggleSource(docId, checked) {
+  const i = study.currentChapter;
+  if (!study.sources[i]) study.sources[i] = [];
+  if (checked && !study.sources[i].includes(docId)) study.sources[i].push(docId);
+  if (!checked) study.sources[i] = study.sources[i].filter(x => x !== docId);
+  renderSourcesChapterNav();
+}
+
+// ==== ÉTAPE 4 — RÉDACTION ====
+function renderRedacChapterNav() {
+  const nav = $("#redac-chapter-nav");
+  nav.innerHTML = "";
+  study.plan.forEach((chap, i) => {
+    const done = study.chapters[i]?.text?.length > 100;
+    const el = document.createElement("div");
+    el.className = "chapter-tab" + (i === study.currentChapter ? " active" : "") + (done ? " done" : "");
+    el.textContent = `${i+1}. ${chap.title.substring(0, 25)}${chap.title.length > 25 ? '…' : ''}`;
+    el.onclick = () => { study.currentChapter = i; renderRedacChapterNav(); renderRedacEditor(); };
+    nav.appendChild(el);
+  });
+  renderRedacEditor();
+}
+function renderRedacEditor() {
+  const i = study.currentChapter;
+  const chap = study.plan[i];
+  const c = study.chapters[i] || {text: "", generated: false};
+  $("#redac-container").innerHTML = `
+    <h3 style="margin:0 0 4px;">Chapitre ${i+1} — ${chap.title}</h3>
+    <div class="hint" style="margin-bottom:12px;">${(study.sources[i]||[]).length} source(s) sélectionnée(s)</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <button class="btn primary" onclick="generateChapter()">🧠 Rédiger avec Claude</button>
+      <button class="btn subtle" onclick="clearChapter()">Effacer</button>
+    </div>
+    <textarea id="chap-text" placeholder="Rédige ici ou clique sur 'Rédiger avec Claude'…" oninput="study.chapters[${i}].text=this.value;renderRedacChapterNav();">${c.text || ''}</textarea>
+  `;
+  if (!study.chapters[i]) study.chapters[i] = {text: "", generated: false};
+}
+async function generateChapter() {
+  const i = study.currentChapter;
+  const chap = study.plan[i];
+  const sourceIds = study.sources[i] || [];
+  const sources = CORPUS.filter(d => sourceIds.includes(d.i));
+  const extraits = sources.length > 0
+    ? sources.map(d => ({titre: d.t || "?", auteur: d.a || "?", date: d.d || "?", texte: (d.x || "").substring(0, 1200)}))
+    : [{titre: "sujet global", auteur: "", date: "", texte: study.subject + " — Chapitre : " + chap.title}];
+  const question = `Rédige le chapitre suivant d'une étude sur « ${study.subject} ».
+
+Chapitre : « ${chap.title} »
+${chap.description ? "Description : " + chap.description : ""}
+
+Contexte : ce chapitre s'inscrit dans une étude structurée en ${study.plan.length} chapitres. Il fait partie du plan : ${study.plan.map((c,j)=>`(${j+1}) ${c.title}`).join(" ; ")}.
+
+Contraintes :
+- Longueur : entre 500 et 900 mots
+- Style : prose académique en français, pas de bullet points
+- Cite les sources verbatim quand pertinent (« citation » — Auteur, Titre, Date)
+- Utilise le vocabulaire propre au mouvement
+- Termine par une phrase de transition vers le chapitre suivant
+
+Rédige uniquement le chapitre, sans titre en haut (le titre sera ajouté par le système).`;
+  $("#chap-text").value = "Rédaction en cours (10-30 s)…";
+  $("#chap-text").disabled = true;
+  try {
+    const resp = await fetch(ASK_ENDPOINT, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({question, extraits, model: "haiku"})
+    });
+    const data = await resp.json();
+    if (data.synthese) {
+      study.chapters[i] = {text: data.synthese.trim(), generated: true};
+      $("#chap-text").value = data.synthese.trim();
+    } else {
+      throw new Error(data.error || "Erreur inconnue");
+    }
+  } catch(e) {
+    $("#chap-text").value = "Erreur : " + e.message + ". Réessaie ou rédige manuellement.";
+  }
+  $("#chap-text").disabled = false;
+  renderRedacChapterNav();
+}
+function clearChapter() {
+  const i = study.currentChapter;
+  study.chapters[i] = {text: "", generated: false};
+  renderRedacEditor();
+  renderRedacChapterNav();
+}
+
+// ==== ÉTAPE 5 — EXPORT ====
+function renderFinalPreview() {
+  let html = `<h3 style="text-align:center;margin:0 0 20px;">${study.subject}</h3>`;
+  study.plan.forEach((chap, i) => {
+    const text = study.chapters[i]?.text || "<em style='color:var(--muted)'>Non rédigé</em>";
+    html += `<div style="margin-bottom:20px;">
+      <h4 style="color:var(--brand);margin:0 0 8px;font-size:14px;">${i+1}. ${chap.title}</h4>
+      <div style="font-size:13px;color:var(--ink);line-height:1.6;">${text.substring(0, 300).replace(/\n/g,"<br>")}${text.length > 300 ? "…" : ""}</div>
+    </div>`;
+  });
+  $("#final-preview").innerHTML = html;
+  const words = Object.values(study.chapters).reduce((sum,c) => sum + (c.text||"").split(/\s+/).length, 0);
+  const totalSources = new Set();
+  Object.values(study.sources).forEach(arr => arr.forEach(id => totalSources.add(id)));
+  $("#stat-chapters").textContent = study.plan.length;
+  $("#stat-words").textContent = words;
+  $("#stat-sources").textContent = totalSources.size;
+}
+function exportPDF() {
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF();
+  const lineH = 5;
+  let y = 20;
+  // Titre
+  doc.setFontSize(18); doc.setFont("helvetica", "bold");
+  const titleLines = doc.splitTextToSize(study.subject, 170);
+  doc.text(titleLines, 20, y); y += titleLines.length * 8;
+  doc.setFontSize(10); doc.setFont("helvetica", "italic"); doc.setTextColor(120);
+  doc.text(`Étude produite via l'Atelier — The Institution, ${new Date().toLocaleDateString('fr-FR')}`, 20, y);
+  y += 12; doc.setTextColor(0);
+  // Chapitres
+  study.plan.forEach((chap, i) => {
+    if (y > 260) { doc.addPage(); y = 20; }
+    doc.setFontSize(13); doc.setFont("helvetica", "bold"); doc.setTextColor(139, 69, 19);
+    doc.text(`${i+1}. ${chap.title}`, 20, y); y += 8; doc.setTextColor(0);
+    doc.setFontSize(10); doc.setFont("helvetica", "normal");
+    const text = study.chapters[i]?.text || "(Non rédigé)";
+    const lines = doc.splitTextToSize(text, 170);
+    lines.forEach(line => {
+      if (y > 275) { doc.addPage(); y = 20; }
+      doc.text(line, 20, y); y += lineH;
+    });
+    y += 6;
+  });
+  doc.save(`etude-${norm(study.subject).replace(/\s+/g,"-").substring(0,40)}.pdf`);
+  toast("PDF téléchargé");
+}
+function exportMarkdown() {
+  let md = `# ${study.subject}\n\n_Étude produite via l'Atelier — The Institution, ${new Date().toLocaleDateString('fr-FR')}_\n\n`;
+  study.plan.forEach((chap, i) => {
+    md += `## ${i+1}. ${chap.title}\n\n${study.chapters[i]?.text || "(Non rédigé)"}\n\n`;
+  });
+  const blob = new Blob([md], {type: "text/markdown"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `etude-${norm(study.subject).replace(/\s+/g,"-").substring(0,40)}.md`;
+  a.click();
+  toast("Markdown téléchargé");
+}
+async function createShareLink() {
+  toast("Sauvegarde de l'étude sur Firestore...");
+  try {
+    if (typeof firebase === "undefined") throw new Error("Firebase non initialisé");
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    const db = firebase.firestore();
+    const id = Math.random().toString(36).substring(2, 10);
+    await db.collection("etudes").doc(id).set({
+      subject: study.subject,
+      plan: study.plan,
+      chapters: study.chapters,
+      created_at: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    const url = `https://ddy970ne-pulse.github.io/Bibliotheque-numerique-EAE/#etude/${id}`;
+    $("#share-result").innerHTML = `
+      <div style="background:rgba(74,103,65,0.08);padding:16px;border-radius:8px;">
+        <div style="font-weight:600;margin-bottom:8px;">🔗 Lien de partage créé :</div>
+        <div class="share-url">${url}</div>
+        <button class="btn secondary" onclick="navigator.clipboard.writeText('${url}');toast('Copié')">Copier</button>
+      </div>`;
+    $("#share-result").classList.remove("hidden");
+  } catch(e) {
+    toast("Erreur : " + e.message);
+    $("#share-result").innerHTML = `<div style='color:var(--danger);padding:12px;'>Impossible de créer le lien : ${e.message}. Vérifie la config Firebase dans le code (FIREBASE_CONFIG).</div>`;
+    $("#share-result").classList.remove("hidden");
+  }
+}
+
+// ==================================================================
+// GÉNÉRATION AUTO : cascade draft (Groq) + refine (Claude) → chapitres
+// ==================================================================
+async function generateFullStudy() {
+  const btn = document.getElementById("btn-auto-generate");
+  const status = document.getElementById("auto-status");
+  const draftModel = document.getElementById("draft-model").value;
+  const refineModel = document.getElementById("refine-model").value;
+
+  // Collecter les sources : union des docs sélectionnés à l'étape 3
+  const allSourceIds = new Set();
+  for (const ids of (study.sources || [])) {
+    (ids || []).forEach(id => allSourceIds.add(id));
+  }
+  const sources = CORPUS.filter(d => allSourceIds.has(d.i)).slice(0, 30);
+
+  if (!sources.length) {
+    alert("Aucune source sélectionnée. Retourne à l'étape 3 et choisis au moins un document.");
+    return;
+  }
+  if (!study.subject) {
+    alert("Le sujet est manquant. Retourne à l'étape 1.");
+    return;
+  }
+  if (!study.plan || !study.plan.length) {
+    alert("Aucun plan défini. Retourne à l'étape 2.");
+    return;
+  }
+
+  btn.disabled = true;
+  status.textContent = `⏳ Draft en cours (Groq, ~10-20 sec)...`;
+
+  try {
+    // === Phase 1 : Draft avec Groq ===
+    const t0 = performance.now();
+    const documents = sources.map(d => ({
+      id: d.i,
+      title: d.t || "sans titre",
+      author: d.a || "",
+      date: d.d || "",
+      text: d.x || "",
+    }));
+    const draftResp = await fetch(DRAFT_ENDPOINT, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        subject: study.subject,
+        pattern: study.pattern || "",
+        documents,
+        sections: study.plan.map(c => c.title),
+        model: draftModel,
+      }),
+    });
+    const draftData = await draftResp.json();
+    if (!draftResp.ok || draftData.error) {
+      throw new Error(draftData.error || `HTTP ${draftResp.status}`);
+    }
+    const draft = draftData.draft;
+    const draftMs = performance.now() - t0;
+    status.textContent = `✓ Draft OK (${(draftMs/1000).toFixed(1)}s, ${draftData.tokens?.output || "?"} tokens)`;
+
+    // === Phase 2 : Refine (optionnel) ===
+    let finalDoc = draft;
+    if (refineModel !== "none") {
+      status.textContent += ` · ⏳ Rédaction académique (Claude, ~30-60 sec)...`;
+      const t1 = performance.now();
+      const refineResp = await fetch(REFINE_ENDPOINT, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          subject: study.subject,
+          draft,
+          model: refineModel,
+        }),
+      });
+      const refineData = await refineResp.json();
+      if (!refineResp.ok || refineData.error) {
+        throw new Error(refineData.error || `HTTP ${refineResp.status}`);
+      }
+      finalDoc = refineData.final;
+      const refineMs = performance.now() - t1;
+      status.textContent = `✓ Draft + Refine OK (total ${((draftMs+refineMs)/1000).toFixed(1)}s)`;
+    }
+
+    // === Injecter dans study.chapters ===
+    if (Array.isArray(finalDoc.sections)) {
+      finalDoc.sections.forEach((sec, i) => {
+        if (i >= study.plan.length) return;
+        // Construire le texte du chapitre
+        let text = "";
+        if (Array.isArray(sec.paragraphs)) {
+          text = sec.paragraphs.join("\n\n");
+        } else if (Array.isArray(sec.key_points)) {
+          text = sec.key_points.map(p => "• " + p).join("\n\n");
+        }
+        // Ajouter les extraits utilisés en bas
+        if (Array.isArray(sec.extracts_used) && sec.extracts_used.length) {
+          text += "\n\n---\n\n**Extraits mobilisés :**\n\n";
+          sec.extracts_used.forEach(ex => {
+            text += `> « ${ex.quote} »\n> — doc ${ex.doc_id}${ex.note ? " · " + ex.note : ""}\n\n`;
+          });
+        }
+        // Ajouter versets
+        if (Array.isArray(sec.verses) && sec.verses.length) {
+          text += "\n\n**Références bibliques :** " + sec.verses.join(", ");
+        }
+        study.chapters[i] = {text, generated: true};
+      });
+    }
+
+    // Refresh de l'éditeur pour montrer le contenu
+    if (typeof renderRedacEditor === "function") renderRedacEditor();
+    if (typeof renderRedacChapterNav === "function") renderRedacChapterNav();
+
+    status.innerHTML = `✅ <strong>Étude générée !</strong> Consulte chaque chapitre ci-dessus, modifie si besoin, puis passe à l'étape 5 pour exporter.`;
+  } catch (err) {
+    console.error(err);
+    status.innerHTML = `❌ Erreur : ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+
+// ==== INIT ====
+const FIREBASE_INDEX_URL = "https://firebasestorage.googleapis.com/v0/b/bibliotheque-rag.firebasestorage.app/o/indexes%2Ffulltext_index_full.json?alt=media";
+
+function checkParentCorpus() {
+  try {
+    if (window.parent && window.parent !== window &&
+        Array.isArray(window.parent.FULLTEXT) && window.parent.FULLTEXT.length) {
+      return window.parent.FULLTEXT;
+    }
+  } catch (e) {}
+  return null;
+}
+
+async function initCorpus() {
+  // 1. Vérif immédiate : le parent est-il déjà chargé ?
+  let parentCorpus = checkParentCorpus();
+  if (parentCorpus) {
+    CORPUS = parentCorpus;
+    console.log(`Atelier · corpus partagé depuis parent : ${CORPUS.length} docs (immédiat)`);
+    return;
+  }
+  // 2. Si on est en iframe, attendre le parent jusqu'à 30s (polling 400ms)
+  const inIframe = (window.parent && window.parent !== window);
+  if (inIframe) {
+    const t0 = performance.now();
+    for (let i = 0; i < 75; i++) {   // 75 × 400ms = 30s
+      await new Promise(r => setTimeout(r, 400));
+      parentCorpus = checkParentCorpus();
+      if (parentCorpus) {
+        CORPUS = parentCorpus;
+        console.log(`Atelier · corpus partagé depuis parent : ${CORPUS.length} docs (attente ${((performance.now()-t0)/1000).toFixed(1)}s)`);
+        return;
+      }
+    }
+    console.warn("Atelier · timeout parent (30s), fallback fetch Firebase");
+  }
+  // 3. Écouter aussi les postMessage 'fulltext_ready' du parent
+  window.addEventListener("message", ev => {
+    if (ev.data && ev.data.type === "fulltext_ready" && !CORPUS.length) {
+      const c = checkParentCorpus();
+      if (c) {
+        CORPUS = c;
+        console.log(`Atelier · corpus reçu via postMessage : ${CORPUS.length} docs`);
+      }
+    }
+  });
+  // 4. Fallback : fetch depuis Firebase Storage
+  try {
+    const t0 = performance.now();
+    const r = await fetch(FIREBASE_INDEX_URL);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    CORPUS = await r.json();
+    console.log(`Atelier · corpus depuis Firebase : ${CORPUS.length} docs en ${((performance.now()-t0)/1000).toFixed(1)}s`);
+  } catch(e) {
+    console.warn("Corpus non chargé, mode démo :", e);
+  }
+}
+initCorpus();
+
+// Style utile
+document.head.insertAdjacentHTML("beforeend", "<style>.hidden{display:none!important}</style>");
+</script>
+
+</body>
+</html>
