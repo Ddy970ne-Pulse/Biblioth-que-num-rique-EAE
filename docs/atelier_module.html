@@ -434,11 +434,10 @@ ${instructions}
 
 Produis maintenant un plan structuré en 5 à 7 chapitres, adapté à ce pattern méthodologique et au sujet spécifique. Chaque chapitre a un titre court (max 12 mots) et une phrase descriptive.
 
-Formate ta réponse en JSON strict, rien d'autre :
-[
-  {"title": "Titre chapitre 1", "description": "phrase de description"},
-  {"title": "Titre chapitre 2", "description": "phrase de description"}
-]`;
+RÈGLE ABSOLUE : ta réponse doit commencer par le caractère "[" et finir par "]". Aucun texte avant, aucun texte après. Aucun préambule, aucun commentaire, aucun titre. Uniquement du JSON strict, parseable directement par JSON.parse().
+
+Exemple exact de format attendu (à reproduire tel quel, avec ton contenu) :
+[{"title":"Introduction","description":"Contexte et enjeu du sujet"},{"title":"Origines","description":"Premières formulations dans le corpus"}]`;
   let rawResponse = "";
   try {
     const resp = await fetch(ASK_ENDPOINT, {
@@ -951,9 +950,9 @@ async function createShareLink() {
 
 // ==================================================================
 // GÉNÉRATION AUTO : cascade draft (Groq) + refine (Claude) → chapitres
-// VERSION_MARKER: v4-fix-rawresponse-2026-08-02
+// VERSION_MARKER: v5-plan-strict-json-2026-08-02
 // ==================================================================
-console.log("[Atelier] Version chargée : v4-fix-rawresponse-2026-08-02");
+console.log("[Atelier] Version chargée : v5-plan-strict-json-2026-08-02");
 async function generateFullStudy() {
   const btn = document.getElementById("btn-auto-generate");
   const status = document.getElementById("auto-status");
