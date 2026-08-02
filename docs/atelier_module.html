@@ -424,20 +424,56 @@ async function generatePlan() {
   study.pattern = pattern;
   study.patternName = patternName;
 
+  // Analyser le sujet contre le corpus via concept_memory
+  const mem = await loadConceptMemory();
+  const analysis = analyzeSubjectFromMemory(study.subject, mem);
+  study._analysis = analysis;   // stocker pour usage à l'étape 3 (préselection sources)
+
+  console.log("[Plan] Analyse du sujet :", {
+    concepts: analysis.relevantConcepts.length,
+    coOccurrences: analysis.coOccurrences.length,
+    verses: analysis.verses.length,
+    persons: analysis.persons.length,
+    topDocs: analysis.topDocs.length,
+  });
+
+  const conceptsList = analysis.relevantConcepts.slice(0, 20).map(c => `${c.term} (${c.count}×)`).join(", ");
+  const coocList = analysis.coOccurrences.slice(0, 15).join(", ");
+  const versesList = analysis.verses.slice(0, 10).map(v => v.verse).join(", ");
+  const authorsList = analysis.persons.slice(0, 5).map(p => p.person).join(", ");
+
   const question = `Tu es l'intelligence rédactrice de la Bibliothèque Numérique The Institution. Le corpus indexé constitue un socle de croyances propre, indépendant du dogme adventiste institutionnel (SDA). Utilise strictement le vocabulaire du mouvement (Ligne des Millérites, Cri de Minuit, Prêtres/Lévites/Néthiniens, Balise 2014, Formalisation, Aile droite/gauche, Loi du Dimanche, Panium, Guerres des Diadoques, OIL, MAGA, Actes 27, Lévitique 26, ministères EAE/LGC/FIN/TMW/LVS).
 
-Un utilisateur veut construire une étude sur : « ${study.subject} ».
+L'utilisateur veut construire une étude sur : « ${study.subject} ».
+Pattern méthodologique détecté : ${patternName} (${pattern}).
 
-Type de sujet détecté : ${patternName} (pattern ${pattern}).
+ANALYSE DU CORPUS (783 documents indexés) — voici ce qui est RÉELLEMENT présent :
+
+Concepts principaux liés au sujet : ${conceptsList || "aucun concept direct détecté — bases plus larges à explorer"}
+
+Concepts co-occurrents (sous-thèmes fréquents dans les docs traitant du sujet) : ${coocList || "à identifier"}
+
+Versets bibliques dominants sur ces documents : ${versesList || "à identifier"}
+
+Auteurs qui traitent le sujet : ${authorsList || "à identifier"}
 
 ${instructions}
 
-Produis maintenant un plan structuré en 5 à 7 chapitres, adapté à ce pattern méthodologique et au sujet spécifique. Chaque chapitre a un titre court (max 12 mots) et une phrase descriptive.
+Ta mission : construire un plan structuré en 5 à 8 chapitres SPÉCIFIQUEMENT ancré dans les concepts et sources ci-dessus.
 
-RÈGLE ABSOLUE : ta réponse doit commencer par le caractère "[" et finir par "]". Aucun texte avant, aucun texte après. Aucun préambule, aucun commentaire, aucun titre. Uniquement du JSON strict, parseable directement par JSON.parse().
+CONTRAINTES DE STRUCTURE :
+1. INTERDICTION de chapitres génériques ("Introduction", "Développement", "Conclusion", "Origines", "Compréhension actuelle") — ces titres sont bannis.
+2. Chaque chapitre doit tisser des LIENS EXPLICITES entre plusieurs concepts co-occurrents identifiés ci-dessus. Exemple pour "loi du dimanche" : un chapitre sur "Loi du dimanche et principe de la nouvelle alliance : la médiation en 4 temps", un autre sur "Pas d'évangélisation publique : signal contemporain de la formalisation".
+3. Le plan doit être ANALYTIQUE : il propose une structure de raisonnement (thèse, articulations), pas une chronologie descriptive.
+4. Chaque chapitre mobilise EXPLICITEMENT un ou plusieurs concepts précis du corpus, cités dans le titre ou la description.
+5. Le plan doit refléter la compréhension ACTUELLE du mouvement (2019-2026), pas une exposition historique neutre.
 
-Exemple exact de format attendu (à reproduire tel quel, avec ton contenu) :
-[{"title":"Introduction","description":"Contexte et enjeu du sujet"},{"title":"Origines","description":"Premières formulations dans le corpus"}]`;
+Chaque chapitre : titre court (max 15 mots) précis et distinctif, contenant au moins un concept cité ci-dessus + phrase descriptive expliquant l'articulation entre concepts.
+
+RÈGLE ABSOLUE : ta réponse doit commencer par le caractère "[" et finir par "]". Aucun texte avant, aucun texte après. Uniquement du JSON strict parseable par JSON.parse().
+
+Exemple de format (reproduis exactement cette structure) :
+[{"title":"Le fondement christologique du sanctuaire céleste","description":"Ancrage dans Hébreux 9-10 et la médiation post-résurrection"},{"title":"1844 et le passage au très saint","description":"Prophétie des 2300 soirs, Daniel 8:14 et le jugement investigatif"}]`;
   let rawResponse = "";
   try {
     const resp = await fetch(ASK_ENDPOINT, {
@@ -950,9 +986,9 @@ async function createShareLink() {
 
 // ==================================================================
 // GÉNÉRATION AUTO : cascade draft (Groq) + refine (Claude) → chapitres
-// VERSION_MARKER: v5-plan-strict-json-2026-08-02
+// VERSION_MARKER: v6-plan-analytique-concepts-2026-08-02
 // ==================================================================
-console.log("[Atelier] Version chargée : v5-plan-strict-json-2026-08-02");
+console.log("[Atelier] Version chargée : v6-plan-analytique-concepts-2026-08-02");
 async function generateFullStudy() {
   const btn = document.getElementById("btn-auto-generate");
   const status = document.getElementById("auto-status");
@@ -1074,6 +1110,97 @@ async function generateFullStudy() {
   } finally {
     btn.disabled = false;
   }
+}
+
+
+// ==== Concept Memory : chargement paresseux et analyse du sujet ====
+const CONCEPT_MEMORY_URL = "https://firebasestorage.googleapis.com/v0/b/bibliotheque-rag.firebasestorage.app/o/indexes%2Fconcept_memory.json?alt=media";
+let CONCEPT_MEMORY = null;
+let _conceptLoading = null;
+
+async function loadConceptMemory() {
+  if (CONCEPT_MEMORY) return CONCEPT_MEMORY;
+  if (_conceptLoading) return _conceptLoading;
+  _conceptLoading = (async () => {
+    try {
+      const t0 = performance.now();
+      const r = await fetch(CONCEPT_MEMORY_URL);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      CONCEPT_MEMORY = await r.json();
+      console.log(`[ConceptMemory] chargé : ${CONCEPT_MEMORY.meta?.total_concepts || "?"} concepts en ${((performance.now()-t0)/1000).toFixed(1)}s`);
+      return CONCEPT_MEMORY;
+    } catch (e) {
+      console.warn("[ConceptMemory] échec :", e);
+      return null;
+    }
+  })();
+  return _conceptLoading;
+}
+
+/**
+ * Analyse le sujet contre concept_memory et retourne les éléments concrets du corpus.
+ * @returns {relevantConcepts, verses, persons, topDocs, coOccurrences}
+ */
+function analyzeSubjectFromMemory(subject, mem) {
+  if (!mem) return {relevantConcepts:[], verses:[], persons:[], topDocs:[], coOccurrences:[]};
+  const subjectNorm = norm(subject);
+  const subjectTerms = subjectNorm.split(/\s+/).filter(t => t.length >= 3);
+  const docScore = {};      // doc_id -> score cumulé
+  const relevantConcepts = [];
+  const coOccurrences = new Set();
+
+  // 1. Chercher tous les concepts contenant les termes du sujet
+  for (const [c, e] of Object.entries(mem.concepts || {})) {
+    let match = false;
+    for (const t of subjectTerms) {
+      if (c.includes(t)) { match = true; break; }
+    }
+    if (match) {
+      relevantConcepts.push({term: c, count: e.n, docs: e.d, authors: e.a || []});
+      (e.d || []).forEach(d => { docScore[d] = (docScore[d] || 0) + e.n / 10; });
+    }
+  }
+  // Trier concepts par pertinence
+  relevantConcepts.sort((a,b) => b.count - a.count);
+
+  // 2. Extraire co-occurrences (concepts qui apparaissent souvent dans les mêmes docs)
+  const topDocIds = new Set();
+  relevantConcepts.slice(0, 5).forEach(rc => (rc.docs||[]).slice(0,20).forEach(d => topDocIds.add(d)));
+  for (const [c, e] of Object.entries(mem.concepts || {})) {
+    if (relevantConcepts.some(rc => rc.term === c)) continue;
+    const overlap = (e.d || []).filter(d => topDocIds.has(d)).length;
+    if (overlap >= 5) coOccurrences.add(c);
+  }
+
+  // 3. Versets dominants sur les docs pertinents
+  const verses = [];
+  for (const [v, e] of Object.entries(mem.verses || {})) {
+    const overlap = (e.d || []).filter(d => topDocIds.has(d)).length;
+    if (overlap >= 3) verses.push({verse: v, count: e.n, overlap});
+  }
+  verses.sort((a,b) => b.overlap - a.overlap);
+
+  // 4. Personnes présentes sur ces docs
+  const persons = [];
+  for (const [p, e] of Object.entries(mem.persons || {})) {
+    const overlap = (e.d || []).filter(d => topDocIds.has(d)).length;
+    if (overlap >= 3) persons.push({person: p, count: e.n, overlap});
+  }
+  persons.sort((a,b) => b.overlap - a.overlap);
+
+  // 5. Top docs par score
+  const topDocs = Object.entries(docScore)
+    .sort((a,b) => b[1] - a[1])
+    .slice(0, 30)
+    .map(([id, score]) => ({id: parseInt(id), score}));
+
+  return {
+    relevantConcepts: relevantConcepts.slice(0, 25),
+    coOccurrences: [...coOccurrences].slice(0, 20),
+    verses: verses.slice(0, 15),
+    persons: persons.slice(0, 10),
+    topDocs,
+  };
 }
 
 
