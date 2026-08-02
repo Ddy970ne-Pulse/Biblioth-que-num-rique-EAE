@@ -168,6 +168,18 @@
     <h2>Sélection des sources</h2>
     <p class="desc">Pour chaque chapitre, coche les documents du corpus à inclure dans la rédaction.</p>
     <div id="sources-chapter-nav" class="chapter-nav"></div>
+
+    <!-- Actions de sélection en masse -->
+    <div id="sources-bulk-actions" style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;padding:10px;background:rgba(124,61,19,0.05);border-radius:6px;align-items:center;">
+      <span style="font-size:12px;color:#555;font-weight:600;">Sélection :</span>
+      <button class="btn subtle" style="font-size:12px;padding:4px 10px;" onclick="selectAllSourcesCurrentChapter()">☑ Tout (ce chapitre)</button>
+      <button class="btn subtle" style="font-size:12px;padding:4px 10px;" onclick="deselectAllSourcesCurrentChapter()">☐ Aucun (ce chapitre)</button>
+      <span style="width:1px;height:20px;background:#ccc;"></span>
+      <button class="btn subtle" style="font-size:12px;padding:4px 10px;" onclick="selectAllSourcesAllChapters()" title="Applique la sélection actuelle à TOUS les chapitres">☑☑ Tout pour tous les chapitres</button>
+      <button class="btn subtle" style="font-size:12px;padding:4px 10px;" onclick="deselectAllSourcesAllChapters()">☐☐ Aucun pour tous les chapitres</button>
+      <span id="sources-bulk-status" style="font-size:12px;color:#4a6741;margin-left:auto;"></span>
+    </div>
+
     <div id="sources-loader" class="loader hidden">
       <div class="spinner"></div>
       <div>Recherche des sources pertinentes…</div>
@@ -185,6 +197,47 @@
     <p class="desc">Génère chaque chapitre avec Claude ou rédige-le toi-même. Tu peux tout modifier après.</p>
     <div id="redac-chapter-nav" class="chapter-nav"></div>
     <div id="redac-container"></div>
+
+    <!-- Mode Auto (cascade Groq + Claude) -->
+    <div style="margin-top:24px;padding:18px;background:rgba(74,103,65,0.06);border-left:4px solid #4a6741;border-radius:6px;">
+      <h3 style="margin:0 0 8px;color:#4a6741;">⚡ Mode Auto — Générer l'étude entière</h3>
+      <p style="margin:0 0 12px;color:#555;font-size:14px;">
+        Une seule action pour produire tous les chapitres en cascade
+        (draft rapide via <strong>Groq</strong> puis rédaction académique via <strong>Claude</strong>).
+        Utilise les sources sélectionnées à l'étape 3 (max 30 docs).
+      </p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div>
+          <label style="display:block;font-size:12px;color:#555;font-weight:600;margin-bottom:4px;">
+            Modèle draft (Groq — gratuit)
+          </label>
+          <select id="draft-model" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:14px;">
+            <option value="llama-3.3-70b-versatile" selected>Llama 3.3 70B (recommandé)</option>
+            <option value="openai/gpt-oss-120b">GPT OSS 120B (plus gros)</option>
+            <option value="openai/gpt-oss-20b">GPT OSS 20B (plus rapide)</option>
+            <option value="qwen/qwen3-32b">Qwen 3 32B</option>
+            <option value="deepseek-r1-distill-llama-70b">DeepSeek R1 Distill 70B (raisonnement)</option>
+          </select>
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;color:#555;font-weight:600;margin-bottom:4px;">
+            Modèle refine (Claude — payant)
+          </label>
+          <select id="refine-model" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:14px;">
+            <option value="claude-sonnet-4-5-20250929" selected>Claude Sonnet 4.5 (~1-2$ / recommandé)</option>
+            <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (~0.20$ / rapide)</option>
+            <option value="none">Aucun (mode gratuit, garde le draft)</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button class="btn primary" id="btn-auto-generate" onclick="generateFullStudy()">
+          🚀 Générer l'étude complète
+        </button>
+        <span id="auto-status" style="font-size:13px;color:#555;"></span>
+      </div>
+    </div>
+
     <div class="actions">
       <button class="btn subtle" onclick="goToStep(3)">← Sources</button>
       <button class="btn primary" onclick="goToStep(5)">Finaliser l'étude →</button>
@@ -216,6 +269,8 @@
 <script>
 // ==== CONFIGURATION ====
 const ASK_ENDPOINT = "https://europe-west1-bibliotheque-rag.cloudfunctions.net/ask";
+const DRAFT_ENDPOINT = "https://draftstudy-gvsquqzqoa-ew.a.run.app";
+const REFINE_ENDPOINT = "https://refinestudy-gvsquqzqoa-ew.a.run.app";
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyC_placeholder_public_key_a_remplir",
   projectId: "bibliotheque-rag",
@@ -496,6 +551,88 @@ function toggleSource(docId, checked) {
   renderSourcesChapterNav();
 }
 
+// ==== Sélection en masse ====
+function _visibleSourceIds() {
+  // Retourne les doc_ids affichés dans la liste (les sources suggérées pour le chapitre courant)
+  const list = document.getElementById("sources-list");
+  if (!list) return [];
+  const ids = [];
+  list.querySelectorAll("input[type=checkbox]").forEach(cb => {
+    // Le onchange contient toggleSource('ID', ...) → extraire l'ID
+    const m = cb.getAttribute("onchange")?.match(/toggleSource\('([^']+)'/);
+    if (m) ids.push(m[1]);
+  });
+  return ids;
+}
+
+function _setBulkStatus(msg) {
+  const el = document.getElementById("sources-bulk-status");
+  if (el) {
+    el.textContent = msg;
+    setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 4000);
+  }
+}
+
+function selectAllSourcesCurrentChapter() {
+  const i = study.currentChapter;
+  const ids = _visibleSourceIds();
+  if (!ids.length) { _setBulkStatus("Aucune source affichée"); return; }
+  study.sources[i] = [...new Set([...(study.sources[i] || []), ...ids])];
+  loadSourcesForCurrent();  // refresh UI
+  renderSourcesChapterNav();
+  _setBulkStatus(`✓ ${ids.length} sources sélectionnées pour le chapitre ${i+1}`);
+}
+
+function deselectAllSourcesCurrentChapter() {
+  const i = study.currentChapter;
+  const before = (study.sources[i] || []).length;
+  study.sources[i] = [];
+  loadSourcesForCurrent();
+  renderSourcesChapterNav();
+  _setBulkStatus(`✓ ${before} sources retirées du chapitre ${i+1}`);
+}
+
+async function selectAllSourcesAllChapters() {
+  if (!confirm(`Sélectionner les sources suggérées pour chaque chapitre (${study.plan.length} chapitres) ?\n\nCela va charger et sélectionner les sources pour tous les chapitres.`)) return;
+  _setBulkStatus("⏳ Traitement en cours...");
+  const originalChapter = study.currentChapter;
+  let total = 0;
+  for (let i = 0; i < study.plan.length; i++) {
+    study.currentChapter = i;
+    // Charger les sources pour ce chapitre (silencieusement)
+    await new Promise(resolve => {
+      loadSourcesForCurrent();
+      // Attendre que le loader disparaisse
+      const check = setInterval(() => {
+        const loader = document.getElementById("sources-loader");
+        if (loader && loader.classList.contains("hidden")) {
+          clearInterval(check);
+          const ids = _visibleSourceIds();
+          study.sources[i] = [...new Set([...(study.sources[i] || []), ...ids])];
+          total += ids.length;
+          resolve();
+        }
+      }, 50);
+    });
+  }
+  study.currentChapter = originalChapter;
+  loadSourcesForCurrent();
+  renderSourcesChapterNav();
+  _setBulkStatus(`✓ ${total} sources sélectionnées au total sur ${study.plan.length} chapitres`);
+}
+
+function deselectAllSourcesAllChapters() {
+  if (!confirm(`Retirer toutes les sources sélectionnées (${study.plan.length} chapitres) ?`)) return;
+  let total = 0;
+  for (let i = 0; i < study.plan.length; i++) {
+    total += (study.sources[i] || []).length;
+    study.sources[i] = [];
+  }
+  loadSourcesForCurrent();
+  renderSourcesChapterNav();
+  _setBulkStatus(`✓ ${total} sources retirées de tous les chapitres`);
+}
+
 // ==== ÉTAPE 4 — RÉDACTION ====
 function renderRedacChapterNav() {
   const nav = $("#redac-chapter-nav");
@@ -662,27 +799,177 @@ async function createShareLink() {
   }
 }
 
+// ==================================================================
+// GÉNÉRATION AUTO : cascade draft (Groq) + refine (Claude) → chapitres
+// ==================================================================
+async function generateFullStudy() {
+  const btn = document.getElementById("btn-auto-generate");
+  const status = document.getElementById("auto-status");
+  const draftModel = document.getElementById("draft-model").value;
+  const refineModel = document.getElementById("refine-model").value;
+
+  // Collecter les sources : union des docs sélectionnés à l'étape 3
+  const allSourceIds = new Set();
+  for (const ids of (study.sources || [])) {
+    (ids || []).forEach(id => allSourceIds.add(id));
+  }
+  const sources = CORPUS.filter(d => allSourceIds.has(d.i)).slice(0, 30);
+
+  if (!sources.length) {
+    alert("Aucune source sélectionnée. Retourne à l'étape 3 et choisis au moins un document.");
+    return;
+  }
+  if (!study.subject) {
+    alert("Le sujet est manquant. Retourne à l'étape 1.");
+    return;
+  }
+  if (!study.plan || !study.plan.length) {
+    alert("Aucun plan défini. Retourne à l'étape 2.");
+    return;
+  }
+
+  btn.disabled = true;
+  status.textContent = `⏳ Draft en cours (Groq, ~10-20 sec)...`;
+
+  try {
+    // === Phase 1 : Draft avec Groq ===
+    const t0 = performance.now();
+    const documents = sources.map(d => ({
+      id: d.i,
+      title: d.t || "sans titre",
+      author: d.a || "",
+      date: d.d || "",
+      text: d.x || "",
+    }));
+    const draftResp = await fetch(DRAFT_ENDPOINT, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        subject: study.subject,
+        pattern: study.pattern || "",
+        documents,
+        sections: study.plan.map(c => c.title),
+        model: draftModel,
+      }),
+    });
+    const draftData = await draftResp.json();
+    if (!draftResp.ok || draftData.error) {
+      throw new Error(draftData.error || `HTTP ${draftResp.status}`);
+    }
+    const draft = draftData.draft;
+    const draftMs = performance.now() - t0;
+    status.textContent = `✓ Draft OK (${(draftMs/1000).toFixed(1)}s, ${draftData.tokens?.output || "?"} tokens)`;
+
+    // === Phase 2 : Refine (optionnel) ===
+    let finalDoc = draft;
+    if (refineModel !== "none") {
+      status.textContent += ` · ⏳ Rédaction académique (Claude, ~30-60 sec)...`;
+      const t1 = performance.now();
+      const refineResp = await fetch(REFINE_ENDPOINT, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          subject: study.subject,
+          draft,
+          model: refineModel,
+        }),
+      });
+      const refineData = await refineResp.json();
+      if (!refineResp.ok || refineData.error) {
+        throw new Error(refineData.error || `HTTP ${refineResp.status}`);
+      }
+      finalDoc = refineData.final;
+      const refineMs = performance.now() - t1;
+      status.textContent = `✓ Draft + Refine OK (total ${((draftMs+refineMs)/1000).toFixed(1)}s)`;
+    }
+
+    // === Injecter dans study.chapters ===
+    if (Array.isArray(finalDoc.sections)) {
+      finalDoc.sections.forEach((sec, i) => {
+        if (i >= study.plan.length) return;
+        // Construire le texte du chapitre
+        let text = "";
+        if (Array.isArray(sec.paragraphs)) {
+          text = sec.paragraphs.join("\n\n");
+        } else if (Array.isArray(sec.key_points)) {
+          text = sec.key_points.map(p => "• " + p).join("\n\n");
+        }
+        // Ajouter les extraits utilisés en bas
+        if (Array.isArray(sec.extracts_used) && sec.extracts_used.length) {
+          text += "\n\n---\n\n**Extraits mobilisés :**\n\n";
+          sec.extracts_used.forEach(ex => {
+            text += `> « ${ex.quote} »\n> — doc ${ex.doc_id}${ex.note ? " · " + ex.note : ""}\n\n`;
+          });
+        }
+        // Ajouter versets
+        if (Array.isArray(sec.verses) && sec.verses.length) {
+          text += "\n\n**Références bibliques :** " + sec.verses.join(", ");
+        }
+        study.chapters[i] = {text, generated: true};
+      });
+    }
+
+    // Refresh de l'éditeur pour montrer le contenu
+    if (typeof renderRedacEditor === "function") renderRedacEditor();
+    if (typeof renderRedacChapterNav === "function") renderRedacChapterNav();
+
+    status.innerHTML = `✅ <strong>Étude générée !</strong> Consulte chaque chapitre ci-dessus, modifie si besoin, puis passe à l'étape 5 pour exporter.`;
+  } catch (err) {
+    console.error(err);
+    status.innerHTML = `❌ Erreur : ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+
 // ==== INIT ====
 const FIREBASE_INDEX_URL = "https://firebasestorage.googleapis.com/v0/b/bibliotheque-rag.firebasestorage.app/o/indexes%2Ffulltext_index_full.json?alt=media";
 
-async function initCorpus() {
-  // 1. Si intégré en iframe et le parent a chargé le corpus → réutiliser (économie 43 MB)
+function checkParentCorpus() {
   try {
-    if (window.parent && window.parent !== window && Array.isArray(window.parent.FULLTEXT) && window.parent.FULLTEXT.length) {
-      CORPUS = window.parent.FULLTEXT;
-      console.log(`Atelier · corpus partagé depuis parent : ${CORPUS.length} docs`);
-      return;
+    if (window.parent && window.parent !== window &&
+        Array.isArray(window.parent.FULLTEXT) && window.parent.FULLTEXT.length) {
+      return window.parent.FULLTEXT;
     }
-  } catch (e) {
-    console.warn("Accès parent bloqué (cross-origin) :", e);
-  }
-  // 2. Si le corpus est sur window (variable globale locale)
-  if (Array.isArray(window.FULLTEXT) && window.FULLTEXT.length) {
-    CORPUS = window.FULLTEXT;
-    console.log(`Atelier · corpus depuis window : ${CORPUS.length} docs`);
+  } catch (e) {}
+  return null;
+}
+
+async function initCorpus() {
+  // 1. Vérif immédiate : le parent est-il déjà chargé ?
+  let parentCorpus = checkParentCorpus();
+  if (parentCorpus) {
+    CORPUS = parentCorpus;
+    console.log(`Atelier · corpus partagé depuis parent : ${CORPUS.length} docs (immédiat)`);
     return;
   }
-  // 3. Fallback : fetch depuis Firebase Storage
+  // 2. Si on est en iframe, attendre le parent jusqu'à 30s (polling 400ms)
+  const inIframe = (window.parent && window.parent !== window);
+  if (inIframe) {
+    const t0 = performance.now();
+    for (let i = 0; i < 75; i++) {   // 75 × 400ms = 30s
+      await new Promise(r => setTimeout(r, 400));
+      parentCorpus = checkParentCorpus();
+      if (parentCorpus) {
+        CORPUS = parentCorpus;
+        console.log(`Atelier · corpus partagé depuis parent : ${CORPUS.length} docs (attente ${((performance.now()-t0)/1000).toFixed(1)}s)`);
+        return;
+      }
+    }
+    console.warn("Atelier · timeout parent (30s), fallback fetch Firebase");
+  }
+  // 3. Écouter aussi les postMessage 'fulltext_ready' du parent
+  window.addEventListener("message", ev => {
+    if (ev.data && ev.data.type === "fulltext_ready" && !CORPUS.length) {
+      const c = checkParentCorpus();
+      if (c) {
+        CORPUS = c;
+        console.log(`Atelier · corpus reçu via postMessage : ${CORPUS.length} docs`);
+      }
+    }
+  });
+  // 4. Fallback : fetch depuis Firebase Storage
   try {
     const t0 = performance.now();
     const r = await fetch(FIREBASE_INDEX_URL);
