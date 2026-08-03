@@ -240,7 +240,8 @@
             Modèle draft (Groq — gratuit)
           </label>
           <select id="draft-model" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:14px;">
-            <option value="llama-3.3-70b-versatile" selected>Llama 3.3 70B (recommandé)</option>
+            <option value="llama-3.1-8b-instant" selected>Llama 3.1 8B (30k TPM, recommandé free tier)</option>
+            <option value="llama-3.3-70b-versatile">Llama 3.3 70B (meilleure qualité, 12k TPM)</option>
             <option value="openai/gpt-oss-120b">GPT OSS 120B (plus gros)</option>
             <option value="openai/gpt-oss-20b">GPT OSS 20B (plus rapide)</option>
             <option value="qwen/qwen3-32b">Qwen 3 32B</option>
@@ -299,6 +300,7 @@
 const ASK_ENDPOINT = "https://europe-west1-bibliotheque-rag.cloudfunctions.net/ask";
 const DRAFT_ENDPOINT = "https://draftstudy-gvsquqzqoa-ew.a.run.app";
 const REFINE_ENDPOINT = "https://refinestudy-gvsquqzqoa-ew.a.run.app";
+const PLAN_ENDPOINT = "https://planstudy-gvsquqzqoa-ew.a.run.app";
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyC_placeholder_public_key_a_remplir",
   projectId: "bibliotheque-rag",
@@ -518,17 +520,35 @@ Exemple de format (reproduis exactement cette structure) :
 [{"title":"Le fondement christologique du sanctuaire céleste","description":"Ancrage dans Hébreux 9-10 et la médiation post-résurrection"},{"title":"1844 et le passage au très saint","description":"Prophétie des 2300 soirs, Daniel 8:14 et le jugement investigatif"}]`;
   let rawResponse = "";
   try {
-    const resp = await fetch(ASK_ENDPOINT, {
+    // Utiliser planStudy (Groq/Llama, gratuit, rapide) plutôt qu'ask (Claude, payant)
+    const resp = await fetch(PLAN_ENDPOINT, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
-        question,
-        extraits: [{titre: "sujet", auteur: "", date: "", texte: study.subject}],
-        model: "haiku"
+        subject: study.subject,
+        pattern: pattern,
+        patternName: patternName,
+        patternInstructions: instructions,
+        analysisContext: {
+          concepts: analysis.relevantConcepts.slice(0, 20).map(c => c.term),
+          coOccurrences: analysis.coOccurrences.slice(0, 15),
+          verses: analysis.verses.slice(0, 10).map(v => v.verse),
+          persons: analysis.persons.slice(0, 5).map(p => p.person),
+        },
+        guidance: userGuidance,
+        model: "llama-3.1-8b-instant",
       })
     });
     const data = await resp.json();
-    rawResponse = data.synthese || "";
+    // planStudy retourne { plan: [{title, description}], ... }
+    if (data.plan && Array.isArray(data.plan)) {
+      study.plan = data.plan;
+      console.log(`[Plan] Reçu depuis planStudy : ${data.plan.length} chapitres (${data.model_used})`);
+      $("#plan-loader").classList.add("hidden");
+      renderPlan();
+      return;
+    }
+    rawResponse = data.error || JSON.stringify(data);
     // Parser le JSON du plan (Claude peut renvoyer du texte autour)
     let planText = rawResponse.trim();
     // Priorité 1 : bloc ```json ... ```
@@ -722,15 +742,39 @@ async function loadSourcesForCurrent() {
   const list = $("#sources-list");
   $("#sources-loader").classList.remove("hidden");
   list.innerHTML = "";
-  // Recherche dans le corpus par mot-clef du chapitre
   const query = norm(chap.title + " " + (chap.description || "") + " " + study.subject);
   const terms = query.split(/\s+/).filter(t => t.length >= 4);
-  const scored = CORPUS.map(doc => {
-    const text = norm(doc.x || "");
-    let score = 0;
-    terms.forEach(t => { if (text.includes(t)) score++; });
-    return {doc, score};
-  }).filter(x => x.score >= 2).sort((a,b) => b.score - a.score).slice(0, 12);
+
+  // Utilisation de concept_memory : lookup O(concepts) au lieu de scan O(docs × chars)
+  const mem = await loadConceptMemory();
+  let scored = [];
+  if (mem && mem.concepts) {
+    const docScore = {};
+    for (const [c, e] of Object.entries(mem.concepts)) {
+      for (const t of terms) {
+        if (c.includes(t)) {
+          (e.d || []).forEach(d => { docScore[d] = (docScore[d] || 0) + e.n; });
+          break;
+        }
+      }
+    }
+    // Trier par score et prendre les 15 meilleurs
+    const topIds = Object.entries(docScore).sort((a,b) => b[1] - a[1]).slice(0, 15).map(([id]) => parseInt(id));
+    scored = topIds.map(id => {
+      const doc = CORPUS[id];  // concept_memory doc_id = index dans fulltext_index_full = index dans CORPUS
+      return doc ? {doc, score: docScore[id]} : null;
+    }).filter(Boolean);
+  }
+  // Fallback si concept_memory pas dispo : scan classique (lent)
+  if (!scored.length) {
+    console.warn("[Sources] Fallback scan CORPUS (concept_memory indisponible)");
+    scored = CORPUS.map(doc => {
+      const text = norm(doc.x || "");
+      let score = 0;
+      terms.forEach(t => { if (text.includes(t)) score++; });
+      return {doc, score};
+    }).filter(x => x.score >= 2).sort((a,b) => b.score - a.score).slice(0, 12);
+  }
   $("#sources-loader").classList.add("hidden");
   if (scored.length === 0) {
     list.innerHTML = "<div style='color:var(--muted);padding:20px;text-align:center;'>Aucune source trouvée dans le corpus indexé. La rédaction s'appuiera sur les extraits que Claude connaît déjà.</div>";
@@ -1044,9 +1088,9 @@ async function createShareLink() {
 
 // ==================================================================
 // GÉNÉRATION AUTO : cascade draft (Groq) + refine (Claude) → chapitres
-// VERSION_MARKER: v8-plan-md-fallback-2026-08-02
+// VERSION_MARKER: v10-planStudy-groq-concept-sources-2026-08-03
 // ==================================================================
-console.log("[Atelier] Version chargée : v8-plan-md-fallback-2026-08-02");
+console.log("[Atelier] Version chargée : v10-planStudy-groq-concept-sources-2026-08-03");
 async function generateFullStudy() {
   const btn = document.getElementById("btn-auto-generate");
   const status = document.getElementById("auto-status");
@@ -1320,6 +1364,9 @@ async function initCorpus() {
   }
 }
 initCorpus();
+
+// Charger concept_memory en background dès le démarrage (pour que le plan soit rapide)
+loadConceptMemory().catch(e => console.warn("concept_memory background load failed :", e));
 
 // Style utile
 document.head.insertAdjacentHTML("beforeend", "<style>.hidden{display:none!important}</style>");
