@@ -1088,9 +1088,9 @@ async function createShareLink() {
 
 // ==================================================================
 // GÉNÉRATION AUTO : cascade draft (Groq) + refine (Claude) → chapitres
-// VERSION_MARKER: v10-planStudy-groq-concept-sources-2026-08-03
+// VERSION_MARKER: v11-passages-cibles-2026-08-03
 // ==================================================================
-console.log("[Atelier] Version chargée : v10-planStudy-groq-concept-sources-2026-08-03");
+console.log("[Atelier] Version chargée : v11-passages-cibles-2026-08-03");
 async function generateFullStudy() {
   const btn = document.getElementById("btn-auto-generate");
   const status = document.getElementById("auto-status");
@@ -1124,22 +1124,39 @@ async function generateFullStudy() {
   status.textContent = `⏳ Draft en cours (Groq, ~10-20 sec)...`;
 
   try {
-    // === Phase 1 : Draft avec Groq ===
+    // === Phase 1 : Draft avec Groq — passages ciblés côté serveur ===
     const t0 = performance.now();
-    const documents = sources.map(d => ({
-      id: d.i,
-      title: d.t || "sans titre",
-      author: d.a || "",
-      date: d.d || "",
-      text: d.x || "",
-    }));
+    // On envoie doc_ids (indices dans fulltext_index_full) + subject_terms
+    // Le serveur fait le fetch du texte complet et extrait les passages pertinents
+    const doc_ids = sources.slice(0, 6).map(d => {
+      // Retrouver l'index dans le corpus (position dans CORPUS = position dans fulltext_index_full)
+      return CORPUS.indexOf(d);
+    }).filter(id => id >= 0);
+
+    // Termes du sujet + top concepts détectés à l'étape 2
+    const subject_terms = [];
+    const subjTerms = norm(study.subject).split(/\s+/).filter(t => t.length >= 3);
+    subject_terms.push(...subjTerms);
+    if (study._analysis && study._analysis.relevantConcepts) {
+      study._analysis.relevantConcepts.slice(0, 8).forEach(c => {
+        if (!subject_terms.includes(c.term)) subject_terms.push(c.term);
+      });
+    }
+    if (study._analysis && study._analysis.coOccurrences) {
+      study._analysis.coOccurrences.slice(0, 6).forEach(c => {
+        if (!subject_terms.includes(c)) subject_terms.push(c);
+      });
+    }
+    console.log(`[generateFullStudy] doc_ids envoyés : ${doc_ids.length}, terms=${JSON.stringify(subject_terms.slice(0, 10))}`);
+
     const draftResp = await fetch(DRAFT_ENDPOINT, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
         subject: study.subject,
         pattern: study.pattern || "",
-        documents,
+        doc_ids,
+        subject_terms,
         sections: study.plan.map(c => c.title),
         model: draftModel,
       }),
