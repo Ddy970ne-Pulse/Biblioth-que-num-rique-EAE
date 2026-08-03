@@ -548,6 +548,22 @@ Exemple de format (reproduis exactement cette structure) :
     study.plan = JSON.parse(planText);
     if (!Array.isArray(study.plan) || !study.plan.length) throw new Error("Plan vide");
   } catch (e) {
+    // Fallback A : parser markdown (##  Titre) si l'IA a produit du markdown
+    const mdChapters = rawResponse.match(/^##\s+(.+?)$/gm);
+    if (mdChapters && mdChapters.length >= 3) {
+      study.plan = mdChapters.map((line, i) => {
+        const title = line.replace(/^##\s+/, "").trim();
+        // Chercher description : les 1-2 lignes qui suivent le ##
+        const idx = rawResponse.indexOf(line);
+        const after = rawResponse.substring(idx + line.length).split(/^##/m)[0];
+        const desc = after.split("\n").filter(l => l.trim() && !l.startsWith("#")).slice(0, 2).join(" ").trim().substring(0, 200);
+        return {title: title.substring(0, 100), description: desc};
+      });
+      console.log("[Plan] Parsé depuis markdown :", study.plan.length, "chapitres");
+      $("#plan-loader").classList.add("hidden");
+      renderPlan();
+      return;
+    }
     console.error("Parse plan échoué :", e, "raw:", rawResponse.substring(0, 300));
     // Fallback plan par défaut
     study.plan = [
@@ -1028,9 +1044,9 @@ async function createShareLink() {
 
 // ==================================================================
 // GÉNÉRATION AUTO : cascade draft (Groq) + refine (Claude) → chapitres
-// VERSION_MARKER: v7-plan-guided-2026-08-02
+// VERSION_MARKER: v8-plan-md-fallback-2026-08-02
 // ==================================================================
-console.log("[Atelier] Version chargée : v7-plan-guided-2026-08-02");
+console.log("[Atelier] Version chargée : v8-plan-md-fallback-2026-08-02");
 async function generateFullStudy() {
   const btn = document.getElementById("btn-auto-generate");
   const status = document.getElementById("auto-status");
