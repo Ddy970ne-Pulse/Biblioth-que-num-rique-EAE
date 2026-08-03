@@ -481,8 +481,7 @@
 
     <!-- Section Explorer un concept -->
     <!-- ATELIER_SEC_v1 --><div id="section-etude-atelier" class="hidden" style="padding:0;margin:0;">
-      <iframe data-src="atelier_module.html" style="width:100%;height:calc(100vh - 40px);border:0;display:block;background:transparent;" id="atelier-iframe" title="Atelier d'étude"></iframe>
-      <script>(function(){var f=document.getElementById('atelier-iframe');if(f){f.src=f.getAttribute('data-src')+'?v='+Date.now();}})();</script>
+      <iframe src="atelier_module.html" style="width:100%;height:calc(100vh - 40px);border:0;display:block;background:transparent;" id="atelier-iframe" title="Atelier d'étude"></iframe>
     </div>
     <!-- ATELIER_SEC_v1 --><div id="section-concept" class="hidden">
       <div class="hero" style="margin-bottom:20px;">
@@ -15541,12 +15540,14 @@ function showSection(section) {
   document.getElementById('section-themes').classList.toggle('hidden', section !== 'themes');
   document.getElementById('section-concept').classList.toggle('hidden', section !== 'concept');
   /* ATELIER_JS_v1 */ const eaEl = document.getElementById('section-etude-atelier'); if (eaEl) eaEl.classList.toggle('hidden', section !== 'etude-atelier'); /* ATELIER_JS_v1 */
+  
   // Update nav
   document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
   if (section === 'analyse') { document.getElementById('nav-analyse').classList.add('active'); initCharts(); }
   else if (section === 'themes') { document.getElementById('nav-themes').classList.add('active'); initThemes(); }
   else if (section === 'concept') { document.getElementById('nav-concept').classList.add('active'); }
   /* ATELIER_JS_v1 */ else if (section === 'etude-atelier') { document.getElementById('nav-etude-atelier').classList.add('active'); document.querySelectorAll('.main > .kpi-grid, .main > .search-bar:first-of-type, .main > .results-meta, .main > #results').forEach(el => el.classList.add('hidden')); } /* ATELIER_JS_v1 */
+  
   else document.getElementById('nav-catalogue').classList.add('active');
   // Le section-concept doit également cacher les éléments catalogue
   if (section === 'concept') {
@@ -16790,6 +16791,8 @@ document.querySelectorAll('.nav-item[data-filter-view]').forEach(n => {
   };
 });
 </script>
+
+
 
 
 
