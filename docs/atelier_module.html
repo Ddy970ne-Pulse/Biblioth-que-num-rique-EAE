@@ -240,10 +240,10 @@
             Modèle draft (Groq — gratuit)
           </label>
           <select id="draft-model" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:14px;">
-            <option value="llama-3.1-8b-instant" selected>Llama 3.1 8B (30k TPM, recommandé free tier)</option>
-            <option value="llama-3.3-70b-versatile">Llama 3.3 70B (meilleure qualité, 12k TPM)</option>
-            <option value="openai/gpt-oss-120b">GPT OSS 120B (plus gros)</option>
-            <option value="openai/gpt-oss-20b">GPT OSS 20B (plus rapide)</option>
+            <option value="llama-3.3-70b-versatile" selected>Llama 3.3 70B (recommandé, Dev Tier)</option>
+            <option value="llama-3.1-8b-instant">Llama 3.1 8B (rapide, moins précis)</option>
+            <option value="openai/gpt-oss-120b">GPT OSS 120B (plus gros modèle)</option>
+            <option value="openai/gpt-oss-20b">GPT OSS 20B</option>
             <option value="qwen/qwen3-32b">Qwen 3 32B</option>
             <option value="deepseek-r1-distill-llama-70b">DeepSeek R1 Distill 70B (raisonnement)</option>
           </select>
@@ -1088,9 +1088,9 @@ async function createShareLink() {
 
 // ==================================================================
 // GÉNÉRATION AUTO : cascade draft (Groq) + refine (Claude) → chapitres
-// VERSION_MARKER: v11-passages-cibles-2026-08-03
+// VERSION_MARKER: v12-groq-dev-tier-2026-08-03
 // ==================================================================
-console.log("[Atelier] Version chargée : v11-passages-cibles-2026-08-03");
+console.log("[Atelier] Version chargée : v12-groq-dev-tier-2026-08-03");
 async function generateFullStudy() {
   const btn = document.getElementById("btn-auto-generate");
   const status = document.getElementById("auto-status");
