@@ -954,6 +954,11 @@ function renderRedacEditor() {
       <button class="btn subtle" onclick="if(confirm('Supprimer ce chapitre ?')) { removeChapter(${i}); goToStep(4); }" title="Supprime ce chapitre">🗑 Supprimer ce chapitre</button>
     </div>
     <textarea id="chap-text" placeholder="Le contenu du chapitre apparaîtra ici après génération. Tu peux aussi rédiger toi-même." oninput="study.chapters[${i}].text=this.value;renderRedacChapterNav();">${c.text || ''}</textarea>
+    ${c.extractsHtml ? `
+    <div style="margin-top:16px;">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">📖 Extraits mobilisés (avec hiérarchie des sources)</div>
+      ${c.extractsHtml}
+    </div>` : ''}
   `;
   if (!study.chapters[i]) study.chapters[i] = {text: "", generated: false};
 }
@@ -1340,25 +1345,28 @@ async function generateFullStudy() {
         } else if (Array.isArray(sec.key_points)) {
           text = sec.key_points.map(p => "• " + p).join("\n\n");
         }
-        // Ajouter les extraits utilisés en bas — avec badges hiérarchiques HTML
+        // Ajouter les extraits utilisés en bas — markdown pur (utilisé pour l'export PDF/MD)
+        let extractsHtml = "";
         if (Array.isArray(sec.extracts_used) && sec.extracts_used.length) {
           text += "\n\n---\n\n**Extraits mobilisés :**\n\n";
-          // On stocke à la fois le markdown (compat existant) et le HTML enrichi
           sec.extracts_used.forEach(ex => {
             text += `> « ${ex.quote} »\n> — doc ${ex.doc_id}${ex.note ? " · " + ex.note : ""}\n\n`;
           });
-          // Bloc HTML des extraits avec badges (rendu à côté ou en substitution du markdown selon le viewer)
-          text += "\n\n<!--EXTRACTS_HTML-->\n";
-          sec.extracts_used.forEach(ex => {
-            text += renderExtractWithBadge(ex.quote, ex.doc_id, ex.note || "");
-          });
-          text += "\n<!--/EXTRACTS_HTML-->\n";
+          // Champ séparé HTML avec badges — utilisé UNIQUEMENT pour l'affichage dans l'éditeur
+          // Retrouve l'auteur réel du doc source pour classifier correctement
+          const authorMap = {};
+          sources.forEach(d => { authorMap[d.i] = d.a || ""; });
+          extractsHtml = sec.extracts_used.map(ex => {
+            const authorFromDoc = authorMap[ex.doc_id] || "";
+            const noteWithAuthor = authorFromDoc ? `${authorFromDoc}${ex.note ? ' — ' + ex.note : ''}` : (ex.note || "");
+            return renderExtractWithBadge(ex.quote, ex.doc_id, noteWithAuthor);
+          }).join("");
         }
         // Ajouter versets
         if (Array.isArray(sec.verses) && sec.verses.length) {
           text += "\n\n**Références bibliques :** " + sec.verses.join(", ");
         }
-        study.chapters[i] = {text, generated: true};
+        study.chapters[i] = {text, extractsHtml, generated: true};
       });
     }
 
