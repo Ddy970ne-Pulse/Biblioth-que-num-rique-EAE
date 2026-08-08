@@ -100,6 +100,37 @@
   .stats { display: flex; gap: 20px; justify-content: center; margin: 12px 0;
            font-size: 13px; color: var(--muted); }
   .stats strong { color: var(--brand); font-size: 16px; font-weight: 700; margin-right: 4px; }
+
+  /* === Feed transparent (génération étude) === */
+  .progress-feed { margin-top: 12px; padding: 12px 14px; background: rgba(139,69,19,0.04);
+                   border-left: 3px solid var(--brand); border-radius: 6px; font-size: 13px;
+                   max-height: 240px; overflow-y: auto; }
+  .progress-feed .step { display: flex; align-items: center; gap: 8px; padding: 4px 0;
+                         color: var(--muted); }
+  .progress-feed .step.done { color: var(--ok); }
+  .progress-feed .step.active { color: var(--brand); font-weight: 600; }
+  .progress-feed .step.failed { color: var(--danger); }
+  .progress-feed .icon { display: inline-block; width: 16px; text-align: center; }
+  .progress-feed .step.active .icon { animation: spin 1.2s linear infinite; }
+  @keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+  .progress-feed .meta { color: var(--muted); font-size: 11px; font-family: 'JetBrains Mono', monospace;
+                         margin-left: auto; }
+
+  /* === Badges hiérarchiques des sources === */
+  .src-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 10px;
+               font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; margin-right: 6px;
+               vertical-align: middle; font-family: 'JetBrains Mono', monospace; }
+  .src-badge.norme    { background: #dbeafe; color: #1e3a8a; }   /* Bible / bleu */
+  .src-badge.ange     { background: #fef3c7; color: #78350f; }   /* Anges (Pippenger/Tess/Terrie) / doré */
+  .src-badge.prophete { background: #ede9fe; color: #4c1d95; }   /* Enseignants prophétiques (Parminder/Rodgers/Nyoni/Curtis) / violet */
+  .src-badge.hist     { background: #e5e5e5; color: #525252; }   /* SDA historique / gris */
+  .src-badge.corpus   { background: #dcfce7; color: #14532d; }   /* Corpus interne (EAE etc.) / vert */
+
+  .extract-block { margin: 12px 0; padding: 10px 14px; background: var(--surface);
+                   border-left: 3px solid var(--line); border-radius: 4px; }
+  .extract-block.prio { border-left-color: var(--brand); background: rgba(139,69,19,0.03); }
+  .extract-quote { font-style: italic; color: var(--ink); margin: 4px 0; line-height: 1.6; }
+  .extract-src { font-size: 11px; color: var(--muted); margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -267,6 +298,7 @@
         </button>
         <span id="auto-status" style="font-size:13px;color:#555;"></span>
       </div>
+      <div id="auto-progress" class="progress-feed" style="display:none;"></div>
     </div>
 
     <div class="actions">
@@ -1089,15 +1121,100 @@ async function createShareLink() {
 }
 
 // ==================================================================
-// GÉNÉRATION AUTO : cascade draft (Groq) + refine (Claude) → chapitres
-// VERSION_MARKER: v13-refine-groq-2026-08-03
+// FEED TRANSPARENT — Affiche les étapes de génération en direct
 // ==================================================================
-console.log("[Atelier] Version chargée : v13-refine-groq-2026-08-03");
+const PROGRESS_STEPS = [
+  { id: "analyze",       label: "Analyse du sujet et sélection des concepts" },
+  { id: "docs",          label: "Sélection des documents (priorité auteurs prophétiques ⭐)" },
+  { id: "specialist",    label: "Chargement de la mémoire spécialiste (doctrine)" },
+  { id: "passages",      label: "Extraction des passages ciblés" },
+  { id: "draft",         label: "Génération du draft (Groq)" },
+  { id: "refine",        label: "Refinement stylistique (optionnel)" },
+  { id: "render",        label: "Assemblage des chapitres" },
+];
+
+function initProgressFeed(container, steps = PROGRESS_STEPS) {
+  container.style.display = "block";
+  container.innerHTML = steps.map(s =>
+    `<div class="step" data-step="${s.id}">
+       <span class="icon">○</span>
+       <span class="label">${s.label}</span>
+       <span class="meta"></span>
+     </div>`
+  ).join("");
+}
+
+function updateProgressStep(container, stepId, status, meta = "") {
+  const el = container.querySelector(`[data-step="${stepId}"]`);
+  if (!el) return;
+  el.className = `step ${status}`;
+  const icon = el.querySelector(".icon");
+  icon.textContent = status === "done" ? "✓" : status === "failed" ? "✗" : status === "active" ? "⟳" : "○";
+  if (meta) el.querySelector(".meta").textContent = meta;
+}
+
+// ==================================================================
+// BADGES HIÉRARCHIQUES — Classifie l'auteur d'un extrait
+// ==================================================================
+const PROPHETIC_ANGES = [
+  "pippenger", "jeff pippenger",
+  "tess lambert", "tess",
+  "terrie lambert", "elder terrie",
+];
+const PROPHETIC_ENSEIGNANTS = [
+  "parminder biant", "parminder",
+  "r. rodgers", "rodgers", "ronnie rodgers",
+  "blessing nyoni", "nyoni", "blessing",
+  "r. curtis", "curtis",
+];
+const SDA_HISTORIQUE = [
+  "andreasen", "sutherland", "meyers", "were", "wieland", "haskell",
+  "ellen white", "egw", "james white",
+];
+
+function classifyAuthor(authorRaw) {
+  const a = (authorRaw || "").toLowerCase().trim();
+  if (!a) return { cls: "corpus", label: "Corpus" };
+  if (a.includes("bible") || a.includes("écriture") || a.match(/^(genèse|exode|daniel|apocalypse|matthieu|jean|hébreux|romains)/i))
+    return { cls: "norme", label: "Norme" };
+  if (PROPHETIC_ANGES.some(n => a.includes(n)))
+    return { cls: "ange", label: "1er/2e/3e Ange" };
+  if (PROPHETIC_ENSEIGNANTS.some(n => a.includes(n)))
+    return { cls: "prophete", label: "Enseignant prophétique" };
+  if (SDA_HISTORIQUE.some(n => a.includes(n)))
+    return { cls: "hist", label: "SDA historique" };
+  if (a.includes("eden") || a.includes("eae"))
+    return { cls: "corpus", label: "EAE" };
+  return { cls: "corpus", label: "Corpus" };
+}
+
+function renderExtractWithBadge(quote, docId, note) {
+  const authorInfo = classifyAuthor(note);
+  const prio = (authorInfo.cls === "ange" || authorInfo.cls === "prophete" || authorInfo.cls === "norme") ? "prio" : "";
+  const qEsc = String(quote).replace(/</g, "&lt;");
+  const nEsc = String(note || "").replace(/</g, "&lt;");
+  return `<div class="extract-block ${prio}">
+    <span class="src-badge ${authorInfo.cls}">${authorInfo.label}</span>
+    <div class="extract-quote">« ${qEsc} »</div>
+    <div class="extract-src">doc ${docId}${nEsc ? ' · ' + nEsc : ''}</div>
+  </div>`;
+}
+
+// ==================================================================
+// GÉNÉRATION AUTO : cascade draft (Groq) + refine (Claude) → chapitres
+// VERSION_MARKER: v14-badges-feed-2026-08-07
+// ==================================================================
+console.log("[Atelier] Version chargée : v14-badges-feed-2026-08-07");
 async function generateFullStudy() {
   const btn = document.getElementById("btn-auto-generate");
   const status = document.getElementById("auto-status");
+  const feed = document.getElementById("auto-progress");
   const draftModel = document.getElementById("draft-model").value;
   const refineModel = document.getElementById("refine-model").value;
+
+  // Initialise le feed transparent
+  initProgressFeed(feed);
+  updateProgressStep(feed, "analyze", "active");
 
   // Collecter les sources : union des docs sélectionnés à l'étape 3
   // study.sources est un objet {chapterIdx: [docIds]}, pas un array
@@ -1123,7 +1240,9 @@ async function generateFullStudy() {
   }
 
   btn.disabled = true;
-  status.textContent = `⏳ Draft en cours (Groq, ~10-20 sec)...`;
+  status.textContent = `⏳ Draft en cours (Groq)...`;
+  updateProgressStep(feed, "analyze", "done", `${sources.length} sources`);
+  updateProgressStep(feed, "docs", "active");
 
   try {
     // === Phase 1 : Draft avec Groq — passages ciblés côté serveur ===
@@ -1134,6 +1253,13 @@ async function generateFullStudy() {
       // Retrouver l'index dans le corpus (position dans CORPUS = position dans fulltext_index_full)
       return CORPUS.indexOf(d);
     }).filter(id => id >= 0);
+    // Compte les auteurs prophétiques dans la sélection
+    const propheticSources = sources.filter(d => {
+      const a = (d.a || "").toLowerCase();
+      return PROPHETIC_ANGES.some(n => a.includes(n)) || PROPHETIC_ENSEIGNANTS.some(n => a.includes(n));
+    });
+    updateProgressStep(feed, "docs", "done", `${doc_ids.length} docs (${propheticSources.length} ⭐ prophétiques)`);
+    updateProgressStep(feed, "specialist", "active");
 
     // Termes du sujet + top concepts détectés à l'étape 2
     const subject_terms = [];
@@ -1150,6 +1276,9 @@ async function generateFullStudy() {
       });
     }
     console.log(`[generateFullStudy] doc_ids envoyés : ${doc_ids.length}, terms=${JSON.stringify(subject_terms.slice(0, 10))}`);
+    updateProgressStep(feed, "specialist", "done", `${subject_terms.length} concepts injectés`);
+    updateProgressStep(feed, "passages", "done", "extraction serveur");
+    updateProgressStep(feed, "draft", "active", `${draftModel}`);
 
     const draftResp = await fetch(DRAFT_ENDPOINT, {
       method: "POST",
@@ -1170,11 +1299,13 @@ async function generateFullStudy() {
     const draft = draftData.draft;
     const draftMs = performance.now() - t0;
     status.textContent = `✓ Draft OK (${(draftMs/1000).toFixed(1)}s, ${draftData.tokens?.output || "?"} tokens)`;
+    updateProgressStep(feed, "draft", "done", `${(draftMs/1000).toFixed(1)}s · ${draftData.tokens?.output || "?"} tokens`);
 
     // === Phase 2 : Refine (optionnel) ===
     let finalDoc = draft;
     if (refineModel !== "none") {
-      status.textContent += ` · ⏳ Rédaction académique (Claude, ~30-60 sec)...`;
+      status.textContent += ` · ⏳ Rédaction académique (${refineModel})...`;
+      updateProgressStep(feed, "refine", "active", refineModel);
       const t1 = performance.now();
       const refineResp = await fetch(REFINE_ENDPOINT, {
         method: "POST",
@@ -1192,7 +1323,11 @@ async function generateFullStudy() {
       finalDoc = refineData.final;
       const refineMs = performance.now() - t1;
       status.textContent = `✓ Draft + Refine OK (total ${((draftMs+refineMs)/1000).toFixed(1)}s)`;
+      updateProgressStep(feed, "refine", "done", `${(refineMs/1000).toFixed(1)}s`);
+    } else {
+      updateProgressStep(feed, "refine", "done", "sauté");
     }
+    updateProgressStep(feed, "render", "active");
 
     // === Injecter dans study.chapters ===
     if (Array.isArray(finalDoc.sections)) {
@@ -1205,12 +1340,19 @@ async function generateFullStudy() {
         } else if (Array.isArray(sec.key_points)) {
           text = sec.key_points.map(p => "• " + p).join("\n\n");
         }
-        // Ajouter les extraits utilisés en bas
+        // Ajouter les extraits utilisés en bas — avec badges hiérarchiques HTML
         if (Array.isArray(sec.extracts_used) && sec.extracts_used.length) {
           text += "\n\n---\n\n**Extraits mobilisés :**\n\n";
+          // On stocke à la fois le markdown (compat existant) et le HTML enrichi
           sec.extracts_used.forEach(ex => {
             text += `> « ${ex.quote} »\n> — doc ${ex.doc_id}${ex.note ? " · " + ex.note : ""}\n\n`;
           });
+          // Bloc HTML des extraits avec badges (rendu à côté ou en substitution du markdown selon le viewer)
+          text += "\n\n<!--EXTRACTS_HTML-->\n";
+          sec.extracts_used.forEach(ex => {
+            text += renderExtractWithBadge(ex.quote, ex.doc_id, ex.note || "");
+          });
+          text += "\n<!--/EXTRACTS_HTML-->\n";
         }
         // Ajouter versets
         if (Array.isArray(sec.verses) && sec.verses.length) {
@@ -1225,9 +1367,17 @@ async function generateFullStudy() {
     if (typeof renderRedacChapterNav === "function") renderRedacChapterNav();
 
     status.innerHTML = `✅ <strong>Étude générée !</strong> Consulte chaque chapitre ci-dessus, modifie si besoin, puis passe à l'étape 5 pour exporter.`;
+    updateProgressStep(feed, "render", "done", `${(finalDoc.sections || []).length} chapitres`);
   } catch (err) {
     console.error(err);
     status.innerHTML = `❌ Erreur : ${err.message}`;
+    // Marque toutes les étapes non-terminées comme échouées
+    ["analyze", "docs", "specialist", "passages", "draft", "refine", "render"].forEach(sid => {
+      const el = feed.querySelector(`[data-step="${sid}"]`);
+      if (el && el.classList.contains("active")) {
+        updateProgressStep(feed, sid, "failed", err.message.slice(0, 60));
+      }
+    });
   } finally {
     btn.disabled = false;
   }
