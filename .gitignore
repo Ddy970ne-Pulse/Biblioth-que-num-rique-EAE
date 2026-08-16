@@ -4,3 +4,29 @@
 node_modules/
 *.log
 .DS_Store
+# --- Secrets Firebase / API keys ---
+serviceAccountKey.json
+**/serviceAccountKey.json
+*service-account*.json
+*serviceAccount*.json
+firebase-debug.log
+firebase-debug.*.log
+
+# --- Clés et credentials génériques ---
+*.pem
+*.key
+*.p12
+credentials.json
+**/credentials.json
+
+# --- Fichiers d'environnement locaux (rappel) ---
+.env
+.env.local
+.env.*.local
+
+# --- Corpus / gros fichiers (à héberger ailleurs, pas sur GitHub) ---
+fulltext_index_full.json
+fulltext_index_enriched.json
+fulltext_index_2026_new.json
+_downloads_edenaeden_2026/
+_backups_corpus/
