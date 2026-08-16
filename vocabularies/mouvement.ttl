@@ -50,6 +50,22 @@ mvt:Periode a owl:Class ;
     rdfs:label "Période"@fr ;
     rdfs:comment "Période ou phase d'enseignement identifiable dans l'histoire du mouvement."@fr .
 
+mvt:LignePropetique a owl:Class ;
+    rdfs:label "Ligne prophétique"@fr ;
+    rdfs:comment "Ligne de réforme ou ligne cosmique servant de cadre à la lecture prophétique. Deux niveaux distincts attestés : (1) ligne cosmique chiasmique — Ligne d'Éden à Éden — englobant toute l'histoire humaine du péché originel à Éden restauré, avec la Loi du Dimanche comme pivot du chiasme ; (2) lignes dispensationnelles — Ligne de l'Humanité (aussi appelée ligne des 144 000, ligne unique post-2021), lignes des Prêtres/Lévites/Néthiniens (historiques, caduques comme méthodologie active), ligne des Millérites, ligne de Christ ; et lignes typologiques — ligne de l'Agriculture, ligne des Rois, ligne des Institutions (Actes 27). Toutes les lignes autres qu'Éden à Éden sont des segments, angles ou grilles de lecture au sein de cette ligne cosmique englobante."@fr .
+
+mvt:BaliseTemporelle a owl:Class ;
+    rdfs:label "Balise temporelle"@fr ;
+    rdfs:comment "Balise ou marqueur prophétique daté servant de repère chronologique dans le déroulement des lignes. Balises attestées dans le corpus : 1798, 1844, 1863, 1888, 1989, 2001, 2014, 2016, 2020-2021, 2024, 2025, 2026 ; événements datés : 22 octobre 1844, 6 janvier 2021 (fin du 6ème royaume), 18 juillet 2024 (LD dispensationnelle), 20 janvier 2025, 3 janvier 2026 ; balises non datées : LD (Loi du Dimanche), FTG (Fin du Temps de Grâce), 2nde Venue."@fr .
+
+mvt:Evenement a owl:Class ;
+    rdfs:label "Événement de diffusion"@fr ;
+    rdfs:comment "Type d'événement au cours duquel un enseignement a été délivré : Camp Meeting, Vêpres, IPR Meeting, ICM Meeting, Sabbath Meeting, Séminaire, Question & Réponse, Sabbat Zoom, Livrable, Newsletter."@fr .
+
+mvt:Contexte a owl:Class ;
+    rdfs:label "Contexte de diffusion"@fr ;
+    rdfs:comment "Contexte géographique ou institutionnel de diffusion d'un enseignement : EAE France, EVE Guadeloupe, GCM (Guadeloupe Camp Meeting), IPR (Institute for Prophetic Research), TIN, ICM France, LGC (Le Grand Cri), PP Slovaquie, OL Brésil/Portugal, TMW, MPS Columbia, Tahiti, Ouganda-Jinja, Île de la Réunion, Fidji, Martinique."@fr .
+
 # ---------------------------------------------------------------------------
 # Propriétés — Document (Étude et Article/Ouvrage)
 # ---------------------------------------------------------------------------
@@ -88,6 +104,35 @@ mvt:citationExterne a rdf:Property ;
     rdfs:comment "Référence à une source extérieure au mouvement, explicitement citée à l'intérieur d'une étude (mention ponctuelle, pas le document lui-même — voir mvt:ArticleOuvrage pour le cas où le document entier est d'origine externe). Seule catégorie de source externe que l'assistant IA de la bibliothèque est autorisé à restituer depuis une mvt:Etude, et toujours en la signalant comme telle."@fr ;
     rdfs:domain mvt:Etude .
 
+mvt:ligne a rdf:Property ;
+    rdfs:label "Ligne prophétique concernée"@fr ;
+    rdfs:comment "Ligne(s) prophétique(s) à laquelle/auxquelles ce document se rapporte. Permet une navigation par ligne (ex. tous les documents concernant la Ligne d'Éden à Éden) et facilite le RAG à répondre à des questions sur une ligne précise sans confondre avec les autres."@fr ;
+    rdfs:domain mvt:Document ;
+    rdfs:range mvt:LignePropetique .
+
+mvt:balise a rdf:Property ;
+    rdfs:label "Balise temporelle mentionnée"@fr ;
+    rdfs:comment "Balise(s) temporelle(s) mentionnée(s) dans ce document. Sert à retrouver rapidement toutes les études traitant d'une date-clé (ex. 18 juillet 2024, FTG, LD) et à pondérer la pertinence par balise dans le retrieval."@fr ;
+    rdfs:domain mvt:Document ;
+    rdfs:range mvt:BaliseTemporelle .
+
+mvt:evenement a rdf:Property ;
+    rdfs:label "Événement de diffusion"@fr ;
+    rdfs:comment "Type d'événement au cours duquel le document a été délivré (Camp Meeting, Vêpres, IPR Meeting, etc.)."@fr ;
+    rdfs:domain mvt:Document ;
+    rdfs:range mvt:Evenement .
+
+mvt:contexte a rdf:Property ;
+    rdfs:label "Contexte géographique de diffusion"@fr ;
+    rdfs:comment "Contexte géographique/institutionnel de diffusion (EAE France, EVE Guadeloupe, GCM, IPR, TIN, etc.)."@fr ;
+    rdfs:domain mvt:Document ;
+    rdfs:range mvt:Contexte .
+
+mvt:visionType a rdf:Property ;
+    rdfs:label "Type de vision prophétique"@fr ;
+    rdfs:comment "Type de vision selon la doctrine attestée : chazon (vision panoramique, embrasse toute une ligne d'un coup), mareh (vision progressive/dispensationnelle, se déroule étape par étape). Attribut analytique optionnel utile pour distinguer les deux angles de lecture d'un même événement prophétique."@fr ;
+    rdfs:domain mvt:Etude .
+
 # ---------------------------------------------------------------------------
 # Propriétés — Auteur
 # ---------------------------------------------------------------------------
@@ -106,3 +151,33 @@ mvt:themeParent a rdf:Property ;
     rdfs:comment "Thème plus général dont celui-ci est un sous-thème, pour construire une arborescence de thèmes."@fr ;
     rdfs:domain mvt:Theme ;
     rdfs:range mvt:Theme .
+
+# ---------------------------------------------------------------------------
+# Propriétés — Ligne prophétique
+# ---------------------------------------------------------------------------
+
+mvt:ligneEnglobante a rdf:Property ;
+    rdfs:label "Ligne englobante"@fr ;
+    rdfs:comment "Ligne prophétique de niveau supérieur qui englobe celle-ci. Ex. : la Ligne de l'Humanité, les lignes des Prêtres/Lévites/Néthiniens, la ligne de Christ, la ligne des Millérites sont toutes englobées par la Ligne d'Éden à Éden (ligne cosmique)."@fr ;
+    rdfs:domain mvt:LignePropetique ;
+    rdfs:range mvt:LignePropetique .
+
+mvt:ligneCaduque a rdf:Property ;
+    rdfs:label "Ligne caduque comme méthodologie active"@fr ;
+    rdfs:comment "Indique si cette ligne est caduque comme méthodologie ACTIVE (booléen). Ex. : lignes des Prêtres/Lévites/Néthiniens sont caduques post-2021 (FTG) selon Terrie 2025 — elles restent utiles rétrospectivement mais ne servent plus à se localiser dans le présent. La méthodologie active post-FTG est celle des dispensations et de la Ligne de l'Humanité (144K)."@fr ;
+    rdfs:domain mvt:LignePropetique .
+
+# ---------------------------------------------------------------------------
+# Propriétés — Balise temporelle
+# ---------------------------------------------------------------------------
+
+mvt:baliseDate a rdf:Property ;
+    rdfs:label "Date de la balise"@fr ;
+    rdfs:comment "Date précise de la balise si connue (format ISO). Ex. : 1798, 1844-10-22, 2021-01-06, 2024-07-18, 2026-01-03. Certaines balises sont non-datées (LD, FTG, 2nde Venue)."@fr ;
+    rdfs:domain mvt:BaliseTemporelle .
+
+mvt:baliseLigne a rdf:Property ;
+    rdfs:label "Ligne d'appartenance de la balise"@fr ;
+    rdfs:comment "Ligne prophétique à laquelle cette balise appartient (ex. 22 octobre 1844 → Ligne des Millérites ; 18 juillet 2024 → Ligne de l'Humanité)."@fr ;
+    rdfs:domain mvt:BaliseTemporelle ;
+    rdfs:range mvt:LignePropetique .
