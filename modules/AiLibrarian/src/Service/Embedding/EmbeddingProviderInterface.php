@@ -15,19 +15,31 @@ namespace AiLibrarian\Service\Embedding;
  */
 interface EmbeddingProviderInterface
 {
+    /** Texte à indexer côté corpus (embedding "document"). */
+    public const TYPE_DOCUMENT = 'document';
+
+    /** Texte tapé par l'utilisateur au moment de la recherche (embedding "query").
+     *  Voyage AI (et OpenAI text-embedding-3, etc.) produit des vecteurs
+     *  optimisés différemment pour query vs document : utiliser 'document'
+     *  pour la query dégrade la pertinence (tous les scores convergent
+     *  autour d'une moyenne quasi identique). */
+    public const TYPE_QUERY = 'query';
+
     /**
+     * @param string $type EmbeddingProviderInterface::TYPE_DOCUMENT | TYPE_QUERY
      * @return float[] Vecteur représentant le texte.
      */
-    public function embed(string $text): array;
+    public function embed(string $text, string $type = self::TYPE_DOCUMENT): array;
 
     /**
      * Version en lot d'embed(), à privilégier lors de l'indexation pour
      * limiter le nombre d'appels réseau vers le fournisseur.
      *
      * @param string[] $texts
+     * @param string $type EmbeddingProviderInterface::TYPE_DOCUMENT | TYPE_QUERY
      * @return float[][] Un vecteur par texte, dans le même ordre.
      */
-    public function embedBatch(array $texts): array;
+    public function embedBatch(array $texts, string $type = self::TYPE_DOCUMENT): array;
 
     /**
      * Dimension des vecteurs produits par ce fournisseur. Deux vecteurs de

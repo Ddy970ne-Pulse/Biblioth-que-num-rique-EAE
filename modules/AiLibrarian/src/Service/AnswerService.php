@@ -56,14 +56,28 @@ class AnswerService
      */
     public function search(string $query, int $topK = self::TOP_K): array
     {
-        $queryVector = $this->embeddingProvider->embed($query);
+        // IMPORTANT : la query utilisateur doit être embeddée avec
+        // input_type='query', pas 'document', sinon les scores convergent
+        // tous autour d'une même valeur (Voyage produit des vecteurs
+        // différents selon le mode ; voir EmbeddingProviderInterface).
+        $queryVector = $this->embeddingProvider->embed(
+            $query,
+            \AiLibrarian\Service\Embedding\EmbeddingProviderInterface::TYPE_QUERY
+        );
         $providerName = $this->embeddingProvider->name();
 
-        // Pour un grand corpus, cette comparaison en mémoire devient le
-        // goulot d'étranglement — voir la note dans
-        // EmbeddingProviderInterface sur la migration vers une base
-        // vectorielle dédiée.
-        $rows = $this->connection->fetchAllAssociative(
+        // Pour un grand corpus, la comparaison en mémoire est le goulot
+        // d'étranglement — voir EmbeddingProviderInterface pour la note sur
+        // la migration vers une base vectorielle dédiée.
+        //
+        // On streame les lignes une par une (iterateAssociative) au lieu de
+        // fetchAllAssociative, sinon PHP charge tout le corpus indexé en
+        // mémoire (85 000 chunks × embedding JSON ~15 KB = ~1.3 GB de data
+        // brute, ~5 GB une fois désérialisé en arrays PHP → fatal
+        // "memory exhausted" dès qu'on dépasse quelques milliers d'items).
+        // Ici, seul le score (petit) est retenu ; le vector est libéré à
+        // chaque itération.
+        $iter = $this->connection->iterateAssociative(
             'SELECT item_id, content, embedding
              FROM ai_librarian_chunk
              WHERE embedding_provider = :provider',
@@ -71,7 +85,7 @@ class AnswerService
         );
 
         $scored = [];
-        foreach ($rows as $row) {
+        foreach ($iter as $row) {
             $vector = json_decode($row['embedding'], true);
             if (!is_array($vector)) {
                 continue;
@@ -81,21 +95,35 @@ class AnswerService
                 'content' => $row['content'],
                 'score' => $this->cosineSimilarity($queryVector, $vector),
             ];
+            // Libère explicitement pour aider le GC (le vector fait ~8 KB).
+            unset($vector, $row);
         }
 
         usort($scored, static fn ($a, $b) => $b['score'] <=> $a['score']);
-        $top = array_slice($scored, 0, $topK);
 
+        // Déduplication par item : on garde au max 1 chunk par item d'origine,
+        // pour éviter que top-K soit dominé par un seul item qui a beaucoup
+        // de chunks similaires (typiquement les études OCR longues où les
+        // headers de mise en page sont répétés partout). L'utilisateur veut
+        // top-K études distinctes, pas top-K chunks.
         $results = [];
-        foreach ($top as $entry) {
+        $seenItems = [];
+        foreach ($scored as $entry) {
+            if (count($results) >= $topK) {
+                break;
+            }
             if ($entry['score'] < self::RELEVANCE_THRESHOLD) {
-                continue;
+                break; // scored trié DESC → une fois sous le seuil, tout le reste aussi.
+            }
+            if (isset($seenItems[$entry['item_id']])) {
+                continue; // déjà pris le meilleur chunk de cet item.
             }
             $meta = $this->itemMeta($entry['item_id']);
             if ($meta === null) {
                 // L'item a pu être supprimé depuis la dernière indexation.
                 continue;
             }
+            $seenItems[$entry['item_id']] = true;
             $results[] = [
                 'item_id' => $entry['item_id'],
                 'title' => $meta['title'],

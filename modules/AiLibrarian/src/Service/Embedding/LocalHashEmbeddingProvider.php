@@ -20,8 +20,11 @@ class LocalHashEmbeddingProvider implements EmbeddingProviderInterface
 {
     private const DIMENSIONS = 512;
 
-    public function embed(string $text): array
+    public function embed(string $text, string $type = self::TYPE_DOCUMENT): array
     {
+        // Le mode local-hash n'a pas de notion "query vs document" (c'est
+        // du bag-of-words), donc $type est ignoré ; on l'accepte pour
+        // rester conforme à l'interface EmbeddingProviderInterface.
         $vector = array_fill(0, self::DIMENSIONS, 0.0);
 
         $tokens = $this->tokenize($text);
@@ -37,9 +40,9 @@ class LocalHashEmbeddingProvider implements EmbeddingProviderInterface
         return $this->normalize($vector);
     }
 
-    public function embedBatch(array $texts): array
+    public function embedBatch(array $texts, string $type = self::TYPE_DOCUMENT): array
     {
-        return array_map([$this, 'embed'], $texts);
+        return array_map(fn ($text) => $this->embed($text, $type), $texts);
     }
 
     public function dimensions(): int

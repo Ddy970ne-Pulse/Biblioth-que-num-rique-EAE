@@ -27,21 +27,46 @@ class VoyageEmbeddingProvider implements EmbeddingProviderInterface
         $this->model = $model;
     }
 
-    public function embed(string $text): array
+    public function embed(string $text, string $type = self::TYPE_DOCUMENT): array
     {
-        return $this->embedBatch([$text])[0];
+        return $this->embedBatch([$text], $type)[0];
     }
 
-    public function embedBatch(array $texts): array
+    /** Nombre max de textes par requête HTTP. Voyage accepte jusqu'à 128,
+     *  mais des batches plus modestes évitent les timeouts sur des chunks
+     *  volumineux (OCR de PDF entiers → cellules abstract très longues). */
+    private const BATCH_SIZE = 32;
+
+    /** Timeout curl par requête (secondes). Suffisant pour un batch de 32
+     *  chunks de ~800 caractères + latence réseau, avec marge. */
+    private const HTTP_TIMEOUT = 180;
+
+    public function embedBatch(array $texts, string $type = self::TYPE_DOCUMENT): array
     {
         if (empty($texts)) {
             return [];
         }
 
+        // Découpe en sous-batches pour éviter de dépasser les limites
+        // pratiques de l'API (timeout HTTP, payload trop gros).
+        $texts = array_values($texts);
+        $vectors = [];
+        foreach (array_chunk($texts, self::BATCH_SIZE) as $batch) {
+            $vectors = array_merge($vectors, $this->requestBatch($batch, $type));
+        }
+        return $vectors;
+    }
+
+    private function requestBatch(array $batch, string $type): array
+    {
         $payload = json_encode([
-            'input' => array_values($texts),
+            'input' => array_values($batch),
             'model' => $this->model,
-            'input_type' => 'document',
+            // 'document' pour indexation, 'query' pour requête utilisateur.
+            // Voyage produit des vecteurs différents selon le mode : utiliser
+            // 'document' pour la query dégrade sévèrement la pertinence
+            // (tous les scores convergent autour d'une moyenne quasi identique).
+            'input_type' => $type === self::TYPE_QUERY ? 'query' : 'document',
         ]);
 
         $ch = curl_init(self::API_URL);
@@ -53,7 +78,7 @@ class VoyageEmbeddingProvider implements EmbeddingProviderInterface
                 'Authorization: Bearer ' . $this->apiKey,
             ],
             CURLOPT_POSTFIELDS => $payload,
-            CURLOPT_TIMEOUT => 60,
+            CURLOPT_TIMEOUT => self::HTTP_TIMEOUT,
         ]);
 
         $response = curl_exec($ch);

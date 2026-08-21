@@ -4,6 +4,7 @@ namespace AiLibrarian;
 
 use Laminas\EventManager\Event;
 use Laminas\Mvc\Controller\AbstractController;
+use Laminas\Mvc\MvcEvent;
 use Laminas\View\Renderer\PhpRenderer;
 use Omeka\Module\AbstractModule;
 use Laminas\ServiceManager\ServiceLocatorInterface;
@@ -15,6 +16,31 @@ class Module extends AbstractModule
     public function getConfig()
     {
         return include __DIR__ . '/config/module.config.php';
+    }
+
+    /**
+     * Déclare les ACL du module. Sans ça, Omeka bloque l'accès aux
+     * contrôleurs personnalisés avec PermissionDeniedException — d'où
+     * l'HTTP 500 sur /ai-librarian/ask.
+     *
+     * On ouvre les deux contrôleurs (public + admin) à tous les rôles ;
+     * Omeka applique déjà son propre filtrage d'auth sur les routes /admin,
+     * donc pas besoin de restreindre plus finement ici.
+     */
+    public function onBootstrap(MvcEvent $event)
+    {
+        parent::onBootstrap($event);
+
+        /** @var \Omeka\Permissions\Acl $acl */
+        $acl = $this->getServiceLocator()->get('Omeka\Acl');
+
+        $acl->allow(
+            null,
+            [
+                'AiLibrarian\Controller\SearchController',
+                'AiLibrarian\Controller\Admin\IndexController',
+            ]
+        );
     }
 
     public function install(ServiceLocatorInterface $serviceLocator)
