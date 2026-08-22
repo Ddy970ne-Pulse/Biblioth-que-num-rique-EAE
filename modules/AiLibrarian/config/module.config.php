@@ -130,12 +130,47 @@ return [
                 $model = $settings->get('ailibrarian_anthropic_model')
                     ?: (getenv('ANTHROPIC_MODEL') ?: 'claude-opus-4-8');
 
+                // Tentative de connexion à Postgres/pgvector. Facultatif :
+                // si le service n'est pas lancé ou si l'extension n'est pas
+                // dispo, AnswerService retombera sur le fallback MySQL.
+                // Variables d'env fournies par docker-compose.yml (service
+                // `vectors`).
+                $pgvector = null;
+                $pgHost = getenv('VECTORS_HOST');
+                if ($pgHost) {
+                    try {
+                        $pgvector = new \PDO(
+                            sprintf(
+                                'pgsql:host=%s;port=%s;dbname=%s',
+                                $pgHost,
+                                getenv('VECTORS_PORT') ?: '5432',
+                                getenv('VECTORS_DATABASE') ?: 'vectors'
+                            ),
+                            getenv('VECTORS_USER') ?: 'vectors',
+                            getenv('VECTORS_PASSWORD') ?: '',
+                            [
+                                \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+                                // Pas de ATTR_PERSISTENT : instable en Apache
+                                // mod_php avec pdo_pgsql (connexions bloquées
+                                // entre workers). Coût re-connect ~5-10 ms,
+                                // négligeable vs latence Voyage + Claude.
+                            ]
+                        );
+                    } catch (\PDOException $e) {
+                        // On log dans les erreurs Apache mais on ne fait pas
+                        // échouer la construction du service — fallback MySQL.
+                        error_log('[AiLibrarian] pgvector indisponible, fallback MySQL : ' . $e->getMessage());
+                        $pgvector = null;
+                    }
+                }
+
                 return new AnswerService(
                     $container->get('Omeka\ApiManager'),
                     $container->get('Omeka\Connection'),
                     $container->get(EmbeddingProviderInterface::class),
                     $apiKey !== '' ? $apiKey : null,
-                    $model
+                    $model,
+                    $pgvector
                 );
             },
         ],

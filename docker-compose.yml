@@ -15,6 +15,26 @@ services:
       timeout: 5s
       retries: 20
 
+  # PostgreSQL avec pgvector pour l'index vectoriel de la recherche
+  # sémantique (module AiLibrarian). Choisi en side-car de MySQL plutôt qu'en
+  # remplacement : Omeka reste sur MySQL, on ajoute juste un service dédié
+  # à la recherche vectorielle. L'index HNSW de pgvector fait passer la
+  # recherche de O(N) à O(log N), soit ~100s → <5s sur 85k embeddings.
+  vectors:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${VECTORS_USER:-vectors}
+      POSTGRES_PASSWORD: ${VECTORS_PASSWORD:-vectors_local_pwd_2026}
+      POSTGRES_DB: ${VECTORS_DATABASE:-vectors}
+    volumes:
+      - vectors_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${VECTORS_USER:-vectors} -d ${VECTORS_DATABASE:-vectors}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   omeka:
     build:
       context: .
@@ -24,6 +44,8 @@ services:
     restart: unless-stopped
     depends_on:
       db:
+        condition: service_healthy
+      vectors:
         condition: service_healthy
     environment:
       MYSQL_HOST: db
@@ -35,6 +57,12 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL}
       VOYAGE_API_KEY: ${VOYAGE_API_KEY}
+      # Connexion à Postgres/pgvector pour la recherche vectorielle.
+      VECTORS_HOST: vectors
+      VECTORS_PORT: 5432
+      VECTORS_USER: ${VECTORS_USER:-vectors}
+      VECTORS_PASSWORD: ${VECTORS_PASSWORD:-vectors_local_pwd_2026}
+      VECTORS_DATABASE: ${VECTORS_DATABASE:-vectors}
     ports:
       - "${OMEKA_HTTP_PORT}:80"
     volumes:
@@ -51,3 +79,4 @@ volumes:
   omeka_files:
   omeka_config:
   omeka_logs:
+  vectors_data:

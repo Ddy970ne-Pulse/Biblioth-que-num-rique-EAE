@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libicu-dev \
         libxml2-dev \
         libonig-dev \
+        libpq-dev \
         unzip \
         wget \
         ca-certificates \
@@ -16,6 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && docker-php-ext-install -j"$(nproc)" \
         pdo_mysql \
         mysqli \
+        pdo_pgsql \
+        pgsql \
         gd \
         zip \
         exif \
