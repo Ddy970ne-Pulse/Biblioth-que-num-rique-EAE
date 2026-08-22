@@ -17,11 +17,18 @@ use Omeka\Api\Representation\ItemRepresentation;
  */
 class CorpusIndexer
 {
-    /** Taille cible d'un extrait, en caractères. */
-    private const CHUNK_SIZE = 800;
+    /** Taille cible d'un extrait, en caractères.
+     *  400 caractères ≈ 60-70 mots ≈ un paragraphe. Réduit vs les 800 initiaux
+     *  pour que chaque chunk soit sémantiquement plus discriminant : un chunk
+     *  trop long finit par diluer plusieurs sujets dans un seul vecteur, ce qui
+     *  fait converger toutes les similarités autour d'une même valeur moyenne
+     *  (~70 %). */
+    private const CHUNK_SIZE = 400;
 
-    /** Chevauchement entre deux extraits consécutifs, en caractères. */
-    private const CHUNK_OVERLAP = 100;
+    /** Chevauchement entre deux extraits consécutifs, en caractères.
+     *  Maintient un contexte de continuité entre chunks voisins sans exploser
+     *  le nombre total de chunks (ratio 50/400 = 12,5 %, comme 100/800). */
+    private const CHUNK_OVERLAP = 50;
 
     /** Nombre d'items traités par page lors d'une réindexation complète. */
     private const PAGE_SIZE = 25;
@@ -123,20 +130,61 @@ class CorpusIndexer
     /**
      * Concatène les propriétés textuelles pertinentes de l'item (titre,
      * résumé, description/texte intégral, message clé) en un seul texte à
-     * indexer. Adapter cette liste de propriétés si le modèle de données
-     * (docs/modele-de-donnees.md) évolue.
+     * indexer, en dédupliquant les valeurs identiques et en filtrant le
+     * bruit d'OCR (tables des matières, renvois de page, séquences de
+     * pointillés). Adapter cette liste de propriétés si le modèle de
+     * données (docs/modele-de-donnees.md) évolue.
      */
     private function extractText(ItemRepresentation $item): string
     {
         $parts = [$item->displayTitle()];
+        $seen = []; // dédup exact string pour éviter abstract == description
 
         foreach (['dcterms:abstract', 'dcterms:description', 'mvt:messageCle'] as $term) {
             foreach ($item->value($term, ['all' => true]) as $value) {
-                $parts[] = (string) $value;
+                $text = (string) $value;
+                $cleaned = $this->cleanText($text);
+                if ($cleaned === '') {
+                    continue;
+                }
+                $hash = md5($cleaned);
+                if (isset($seen[$hash])) {
+                    continue; // même contenu déjà pris (typiquement abstract == description)
+                }
+                $seen[$hash] = true;
+                $parts[] = $cleaned;
             }
         }
 
         return implode("\n\n", array_filter($parts));
+    }
+
+    /**
+     * Nettoie un texte extrait d'OCR pour améliorer la qualité sémantique
+     * des chunks. Supprime les patterns de bruit typiques des PDF OCR :
+     *  - lignes de table des matières « Titre .............. 12 »
+     *  - renvois de page « (page 3-4) », « p. 12 », « voir page 5 »
+     *  - séquences de pointillés/tirets/underscores de mise en page
+     *  - lignes ne contenant que des numéros de page ou de section
+     *
+     * Ces éléments faisaient converger les similarités vectorielles (tous
+     * les chunks d'un TOC se ressemblent) et diluaient le contenu doctrinal
+     * dans le bruit typographique.
+     */
+    private function cleanText(string $text): string
+    {
+        // Lignes de TOC : n'importe quoi + 4+ points/tirets/underscores + numéro final
+        $text = preg_replace('/^.*[.\-_]{4,}\s*\d+\s*$/mu', '', $text);
+        // Renvois de page entre parenthèses : « (page 3-4) », « (p. 12) »
+        $text = preg_replace('/\(\s*p(?:age)?\.?\s*\d+(?:\s*[-–]\s*\d+)?\s*\)/iu', '', $text);
+        // Séquences de 4+ pointillés/tirets/underscores dans une ligne
+        $text = preg_replace('/[.\-_]{4,}/u', ' ', $text);
+        // Lignes ne contenant qu'un numéro de page/section
+        $text = preg_replace('/^\s*\d+\s*$/m', '', $text);
+        // Normalisation des espaces (multiples → simple, retours à la ligne préservés)
+        $text = preg_replace('/[ \t]+/', ' ', $text);
+        $text = preg_replace('/\n{3,}/', "\n\n", $text);
+        return trim($text);
     }
 
     /**

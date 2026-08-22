@@ -18,8 +18,14 @@ use Omeka\Api\Manager as ApiManager;
  */
 class AnswerService
 {
-    /** Nombre d'extraits transmis au modèle pour construire une réponse. */
-    private const TOP_K = 6;
+    /** Nombre d'extraits transmis au modèle pour construire une réponse.
+     *  Élargi de 6 à 15 pour que les items référentiels courts
+     *  (mvt:Theme, mvt:Balise, mvt:Personne) qui contiennent des
+     *  attestations doctrinales concises (ex. "Biden = premier roi du 7ème
+     *  royaume") aient une chance de remonter dans le top-K face aux
+     *  chunks longs des études OCR volumineuses. Coût : ~2,5× le contexte
+     *  transmis à Claude, marginal sur voyage-3/opus-4. */
+    private const TOP_K = 15;
 
     /**
      * Score de similarité cosinus minimal pour qu'un extrait soit considéré
