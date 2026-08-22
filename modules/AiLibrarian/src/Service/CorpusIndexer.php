@@ -173,17 +173,26 @@ class CorpusIndexer
      */
     private function cleanText(string $text): string
     {
+        // Chaque preg_replace peut retourner null en cas d'erreur regex
+        // (typiquement chaîne trop longue qui dépasse pcre.backtrack_limit).
+        // On préserve la valeur précédente si null pour éviter les warnings
+        // « Passing null to parameter #3 » et une potentielle chaîne cassée.
+        $safeReplace = static function (string $pattern, string $replacement, string $subject): string {
+            $result = preg_replace($pattern, $replacement, $subject);
+            return $result === null ? $subject : $result;
+        };
+
         // Lignes de TOC : n'importe quoi + 4+ points/tirets/underscores + numéro final
-        $text = preg_replace('/^.*[.\-_]{4,}\s*\d+\s*$/mu', '', $text);
+        $text = $safeReplace('/^.*[.\-_]{4,}\s*\d+\s*$/mu', '', $text);
         // Renvois de page entre parenthèses : « (page 3-4) », « (p. 12) »
-        $text = preg_replace('/\(\s*p(?:age)?\.?\s*\d+(?:\s*[-–]\s*\d+)?\s*\)/iu', '', $text);
+        $text = $safeReplace('/\(\s*p(?:age)?\.?\s*\d+(?:\s*[-–]\s*\d+)?\s*\)/iu', '', $text);
         // Séquences de 4+ pointillés/tirets/underscores dans une ligne
-        $text = preg_replace('/[.\-_]{4,}/u', ' ', $text);
+        $text = $safeReplace('/[.\-_]{4,}/u', ' ', $text);
         // Lignes ne contenant qu'un numéro de page/section
-        $text = preg_replace('/^\s*\d+\s*$/m', '', $text);
+        $text = $safeReplace('/^\s*\d+\s*$/m', '', $text);
         // Normalisation des espaces (multiples → simple, retours à la ligne préservés)
-        $text = preg_replace('/[ \t]+/', ' ', $text);
-        $text = preg_replace('/\n{3,}/', "\n\n", $text);
+        $text = $safeReplace('/[ \t]+/', ' ', $text);
+        $text = $safeReplace('/\n{3,}/', "\n\n", $text);
         return trim($text);
     }
 
@@ -199,6 +208,18 @@ class CorpusIndexer
             return [$text];
         }
 
+        // Avance minimale à chaque itération : suffisante pour progresser
+        // significativement, sinon on produit des dizaines de chunks
+        // quasi-identiques qui décalent d'1 caractère à chaque tour (bug
+        // observé sur les descriptions courtes riches en mots-clés).
+        // Cible : ~87 % de CHUNK_SIZE (400 - 50 overlap = 350).
+        $minAdvance = self::CHUNK_SIZE - self::CHUNK_OVERLAP;
+
+        // Taille minimale d'un chunk pour être retenu — évite de produire
+        // des chunks résiduels de moins de 50 caractères qui n'apportent
+        // rien sémantiquement et polluent le top-K de la recherche.
+        $minChunkSize = self::CHUNK_SIZE / 4;
+
         $chunks = [];
         $start = 0;
 
@@ -206,16 +227,35 @@ class CorpusIndexer
             $chunk = mb_substr($text, $start, self::CHUNK_SIZE, 'UTF-8');
 
             // Évite de couper au milieu d'un mot : recule jusqu'au dernier
-            // espace si l'extrait ne va pas jusqu'à la fin du texte.
+            // espace si l'extrait ne va pas jusqu'à la fin du texte, ET
+            // uniquement si le recul reste raisonnable (au moins la moitié
+            // de CHUNK_SIZE conservée) — sinon on garde le chunk complet
+            // pour ne pas produire de chunks trop petits.
             if ($start + self::CHUNK_SIZE < $length) {
                 $lastSpace = mb_strrpos($chunk, ' ', 0, 'UTF-8');
-                if ($lastSpace !== false && $lastSpace > 0) {
+                if ($lastSpace !== false && $lastSpace > self::CHUNK_SIZE / 2) {
                     $chunk = mb_substr($chunk, 0, $lastSpace, 'UTF-8');
                 }
             }
 
-            $chunks[] = trim($chunk);
-            $start += max(1, mb_strlen($chunk, 'UTF-8') - self::CHUNK_OVERLAP);
+            $trimmed = trim($chunk);
+            $chunkLen = mb_strlen($trimmed, 'UTF-8');
+
+            // Ignore les chunks résiduels trop courts (typiquement la fin
+            // du texte qui produit un chunk minuscule sans valeur).
+            if ($chunkLen < $minChunkSize && $start > 0) {
+                break;
+            }
+
+            if ($chunkLen > 0) {
+                $chunks[] = $trimmed;
+            }
+
+            // Avance de la longueur du chunk moins l'overlap, mais AU MOINS
+            // de $minAdvance caractères pour garantir un progrès net.
+            // Sans ce plancher, la boucle avance parfois d'1 caractère
+            // seulement quand chunkLen ≈ CHUNK_OVERLAP → boucle quasi-infinie.
+            $start += max($minAdvance, mb_strlen($chunk, 'UTF-8') - self::CHUNK_OVERLAP);
         }
 
         return array_values(array_filter($chunks, static fn ($c) => $c !== ''));

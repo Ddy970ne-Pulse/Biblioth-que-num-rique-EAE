@@ -56,9 +56,33 @@ class Module extends AbstractModule
                 embedding_provider VARCHAR(191) NOT NULL,
                 created DATETIME NOT NULL,
                 INDEX idx_ai_librarian_chunk_item (item_id),
-                INDEX idx_ai_librarian_chunk_provider (embedding_provider)
+                INDEX idx_ai_librarian_chunk_provider (embedding_provider),
+                FULLTEXT INDEX ft_content (content)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ');
+    }
+
+    /**
+     * Mise à niveau depuis une version antérieure du module. Ajoute l'index
+     * FULLTEXT sur content, utilisé par AnswerService pour la recherche
+     * hybride BM25 + vectoriel via Reciprocal Rank Fusion.
+     */
+    public function upgrade($oldVersion, $newVersion, ServiceLocatorInterface $serviceLocator)
+    {
+        $connection = $serviceLocator->get('Omeka\Connection');
+        // Vérifier que l'index n'existe pas déjà avant de tenter la création
+        // (SHOW INDEX est plus portable qu'un try/catch DDL).
+        $exists = $connection->fetchOne("
+            SELECT COUNT(*) FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'ai_librarian_chunk'
+              AND INDEX_NAME = 'ft_content'
+        ");
+        if (!$exists) {
+            $connection->executeStatement(
+                'ALTER TABLE ai_librarian_chunk ADD FULLTEXT INDEX ft_content (content)'
+            );
+        }
     }
 
     public function uninstall(ServiceLocatorInterface $serviceLocator)

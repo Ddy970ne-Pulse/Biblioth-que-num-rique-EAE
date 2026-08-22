@@ -60,52 +60,35 @@ class AnswerService
      *
      * @return array<int, array{item_id:int, title:string, content:string, score:float}>
      */
+    /** Nombre de candidats à récupérer par méthode avant fusion RRF. */
+    private const CANDIDATES_PER_METHOD = 50;
+
+    /** Constante k de la formule Reciprocal Rank Fusion (Cormack et al. 2009).
+     *  Valeur standard 60 : donne un poids proche à toutes les positions du top.
+     *  Plus k est petit, plus le top-1 domine le score fusionné. */
+    private const RRF_K = 60;
+
     public function search(string $query, int $topK = self::TOP_K): array
     {
-        // IMPORTANT : la query utilisateur doit être embeddée avec
-        // input_type='query', pas 'document', sinon les scores convergent
-        // tous autour d'une même valeur (Voyage produit des vecteurs
-        // différents selon le mode ; voir EmbeddingProviderInterface).
-        $queryVector = $this->embeddingProvider->embed(
-            $query,
-            \AiLibrarian\Service\Embedding\EmbeddingProviderInterface::TYPE_QUERY
-        );
         $providerName = $this->embeddingProvider->name();
 
-        // Pour un grand corpus, la comparaison en mémoire est le goulot
-        // d'étranglement — voir EmbeddingProviderInterface pour la note sur
-        // la migration vers une base vectorielle dédiée.
+        // Recherche HYBRIDE : combine deux signaux de pertinence complémentaires
+        // via Reciprocal Rank Fusion (RRF, Cormack et al. 2009).
         //
-        // On streame les lignes une par une (iterateAssociative) au lieu de
-        // fetchAllAssociative, sinon PHP charge tout le corpus indexé en
-        // mémoire (85 000 chunks × embedding JSON ~15 KB = ~1.3 GB de data
-        // brute, ~5 GB une fois désérialisé en arrays PHP → fatal
-        // "memory exhausted" dès qu'on dépasse quelques milliers d'items).
-        // Ici, seul le score (petit) est retenu ; le vector est libéré à
-        // chaque itération.
-        $iter = $this->connection->iterateAssociative(
-            'SELECT item_id, content, embedding
-             FROM ai_librarian_chunk
-             WHERE embedding_provider = :provider',
-            ['provider' => $providerName]
-        );
-
-        $scored = [];
-        foreach ($iter as $row) {
-            $vector = json_decode($row['embedding'], true);
-            if (!is_array($vector)) {
-                continue;
-            }
-            $scored[] = [
-                'item_id' => (int) $row['item_id'],
-                'content' => $row['content'],
-                'score' => $this->cosineSimilarity($queryVector, $vector),
-            ];
-            // Libère explicitement pour aider le GC (le vector fait ~8 KB).
-            unset($vector, $row);
-        }
-
-        usort($scored, static fn ($a, $b) => $b['score'] <=> $a['score']);
+        // - Vectoriel (Voyage cosine) : capture la similarité sémantique
+        //   profonde (paraphrases, synonymes, contexte).
+        // - Full-text (MySQL BM25) : garantit qu'un chunk contenant les mots
+        //   EXACTS de la query remonte, indépendamment de son score cosinus.
+        //   Indispensable pour les balises courtes (mvt:Balise, mvt:Theme,
+        //   mvt:Personne) dont le vecteur est peu discriminant face aux
+        //   grosses études, mais dont le contenu match parfaitement une query.
+        //
+        // La fusion RRF évite d'avoir à calibrer les scores hétérogènes entre
+        // cosinus (0 à 1) et BM25 (0 à N indéfini) : elle ne travaille qu'avec
+        // les rangs. Formule : score(chunk) = Σ 1/(k + rang_dans_liste).
+        $vecCandidates = $this->vectorSearch($query, $providerName, self::CANDIDATES_PER_METHOD);
+        $bmCandidates = $this->fulltextSearch($query, $providerName, self::CANDIDATES_PER_METHOD);
+        $fused = $this->reciprocalRankFusion($vecCandidates, $bmCandidates);
 
         // Déduplication par item : on garde au max 1 chunk par item d'origine,
         // pour éviter que top-K soit dominé par un seul item qui a beaucoup
@@ -114,12 +97,9 @@ class AnswerService
         // top-K études distinctes, pas top-K chunks.
         $results = [];
         $seenItems = [];
-        foreach ($scored as $entry) {
+        foreach ($fused as $entry) {
             if (count($results) >= $topK) {
                 break;
-            }
-            if ($entry['score'] < self::RELEVANCE_THRESHOLD) {
-                break; // scored trié DESC → une fois sous le seuil, tout le reste aussi.
             }
             if (isset($seenItems[$entry['item_id']])) {
                 continue; // déjà pris le meilleur chunk de cet item.
@@ -178,6 +158,141 @@ class AnswerService
             'sources' => $this->toSourceList($matches),
             'found' => true,
         ];
+    }
+
+    /**
+     * Recherche vectorielle (cosine similarity) — top N candidats.
+     * Retourne un tableau ordonné du meilleur au moins bon, avec pour chaque
+     * entrée : chunk_id, item_id, content, score, rank.
+     *
+     * @return array<int, array{chunk_id:int, item_id:int, content:string, score:float, rank:int}>
+     */
+    private function vectorSearch(string $query, string $providerName, int $limit): array
+    {
+        $queryVector = $this->embeddingProvider->embed(
+            $query,
+            \AiLibrarian\Service\Embedding\EmbeddingProviderInterface::TYPE_QUERY
+        );
+
+        // Streaming pour éviter d'exploser la RAM sur gros corpus (voir note
+        // détaillée dans la version précédente de search()).
+        $iter = $this->connection->iterateAssociative(
+            'SELECT id, item_id, content, embedding
+             FROM ai_librarian_chunk
+             WHERE embedding_provider = :provider',
+            ['provider' => $providerName]
+        );
+
+        $scored = [];
+        foreach ($iter as $row) {
+            $vector = json_decode($row['embedding'], true);
+            if (!is_array($vector)) {
+                continue;
+            }
+            $scored[] = [
+                'chunk_id' => (int) $row['id'],
+                'item_id' => (int) $row['item_id'],
+                'content' => $row['content'],
+                'score' => $this->cosineSimilarity($queryVector, $vector),
+            ];
+            unset($vector, $row);
+        }
+
+        usort($scored, static fn ($a, $b) => $b['score'] <=> $a['score']);
+        $top = array_slice($scored, 0, $limit);
+
+        // Ajoute le rang (1-based) pour la fusion RRF.
+        foreach ($top as $i => &$entry) {
+            $entry['rank'] = $i + 1;
+        }
+        return $top;
+    }
+
+    /**
+     * Recherche full-text MySQL (BM25 via MATCH ... AGAINST) — top N.
+     * Nécessite un index FULLTEXT sur ai_librarian_chunk.content
+     * (ALTER TABLE ai_librarian_chunk ADD FULLTEXT INDEX ft_content (content)).
+     *
+     * @return array<int, array{chunk_id:int, item_id:int, content:string, score:float, rank:int}>
+     */
+    private function fulltextSearch(string $query, string $providerName, int $limit): array
+    {
+        // Le paramètre :limit ne peut pas être bindé en PDO comme LIMIT (bug
+        // historique DBAL Doctrine). On l'injecte après cast entier pour
+        // éviter toute injection.
+        $limit = max(1, (int) $limit);
+
+        $rows = $this->connection->fetchAllAssociative(
+            'SELECT id, item_id, content,
+                    MATCH(content) AGAINST(:q IN NATURAL LANGUAGE MODE) AS score
+             FROM ai_librarian_chunk
+             WHERE embedding_provider = :provider
+               AND MATCH(content) AGAINST(:q IN NATURAL LANGUAGE MODE)
+             ORDER BY score DESC
+             LIMIT ' . $limit,
+            ['q' => $query, 'provider' => $providerName]
+        );
+
+        $results = [];
+        foreach ($rows as $i => $row) {
+            $results[] = [
+                'chunk_id' => (int) $row['id'],
+                'item_id' => (int) $row['item_id'],
+                'content' => $row['content'],
+                'score' => (float) $row['score'],
+                'rank' => $i + 1,
+            ];
+        }
+        return $results;
+    }
+
+    /**
+     * Reciprocal Rank Fusion (Cormack, Clarke, Büttcher 2009).
+     * Combine deux listes ordonnées de candidats en calculant, pour chaque
+     * chunk, la somme des 1/(k + rang) sur les listes où il apparaît.
+     *
+     * Avantage clé : ne dépend pas de scores comparables. Un chunk qui
+     * apparaît en top d'une seule liste (par ex. BM25 seul) sera bien classé
+     * même si son score vectoriel est faible.
+     *
+     * @param array<int, array{chunk_id:int, item_id:int, content:string, rank:int}> $vecResults
+     * @param array<int, array{chunk_id:int, item_id:int, content:string, rank:int}> $bmResults
+     * @return array<int, array{chunk_id:int, item_id:int, content:string, score:float}>
+     */
+    private function reciprocalRankFusion(array $vecResults, array $bmResults): array
+    {
+        $k = self::RRF_K;
+        $fused = [];
+
+        foreach ($vecResults as $entry) {
+            $id = $entry['chunk_id'];
+            $fused[$id] = [
+                'chunk_id' => $id,
+                'item_id' => $entry['item_id'],
+                'content' => $entry['content'],
+                'score' => 1.0 / ($k + $entry['rank']),
+            ];
+        }
+
+        foreach ($bmResults as $entry) {
+            $id = $entry['chunk_id'];
+            $rrfContribution = 1.0 / ($k + $entry['rank']);
+            if (isset($fused[$id])) {
+                $fused[$id]['score'] += $rrfContribution;
+            } else {
+                $fused[$id] = [
+                    'chunk_id' => $id,
+                    'item_id' => $entry['item_id'],
+                    'content' => $entry['content'],
+                    'score' => $rrfContribution,
+                ];
+            }
+        }
+
+        // Tri décroissant par score fusionné.
+        $fusedList = array_values($fused);
+        usort($fusedList, static fn ($a, $b) => $b['score'] <=> $a['score']);
+        return $fusedList;
     }
 
     private function generate(string $query, array $matches): string
